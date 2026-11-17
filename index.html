@@ -163,7 +163,7 @@ async function start(){
 async function loadAll(){
  var a=await sb.from('az_aree').select('*').eq('attiva',true).order('ordine');if(a.error)throw a.error;S.aree=a.data;
  if(isM()){var pr=await sb.from('az_profili').select('*').order('nome');if(pr.error)throw pr.error;S.profili=pr.data}
- await loadAtt();await loadPian();if(isM())await loadVig()}
+ await loadAtt();await loadPian();if(isM())await loadVig();else await loadFilari()}
 async function loadAtt(){S.att=await fetchAll(function(){var q=sb.from('az_attivita').select('*').order('data',{ascending:false}).order('id',{ascending:false});return isM()?q:q.eq('user_id',S.user.id)})}
 async function loadPian(){
  var p=await sb.from('az_pianificazioni').select('*').order('data');if(p.error)throw p.error;S.pian=p.data;
@@ -193,12 +193,17 @@ function openAtt(o){o=o||{};var e=o.edit,ar=e&&area(e.area_id);
  var d=$('#dlg');d.innerHTML='<h3>'+(e?'Modifica attività':(o.pian?'Segna come fatto':'Registra attività'))+'</h3>'+who+
  '<label>Data</label><input id="fa-d" type="date" value="'+(e?e.data:(o.data||today()))+'" max="'+addDays(today(),0)+'">'+
  '<div class="grid2"><div><label>Settore</label><select id="fa-s">'+SETTORI.map(function(s){return'<option'+(s===sett?' selected':'')+'>'+s+'</option>'}).join('')+'</select></div><div><label>Zona</label><select id="fa-z">'+zoneOpts(sett,ar?ar.id:(o.area_id||0))+'</select></div></div>'+
- '<label>Cosa hai fatto</label><input id="fa-o" list="fa-ol" value="'+esc(e?e.operazione:(o.op||''))+'" placeholder="es. Potatura secca" autocomplete="off"><datalist id="fa-ol"></datalist>'+
+ '<label>Cosa hai fatto</label><input id="fa-o" list="fa-ol" value="'+esc(e?e.operazione:(o.op||''))+'" placeholder="es. Potatura secca" autocomplete="off"><datalist id="fa-ol"></datalist><div id="fa-avz"></div>'+
  '<label>Ore lavorate</label><div class="row"><button class="btn g sm" type="button" data-hr="-0.5">−</button><input id="fa-h" type="number" step="0.25" min="0" max="24" inputmode="decimal" style="width:90px;text-align:center" value="'+(e?e.ore:'')+'" placeholder="0"><button class="btn g sm" type="button" data-hr="0.5">+</button><button class="btn g sm" type="button" data-hr="x4">4 h</button><button class="btn g sm" type="button" data-hr="x8">8 h</button></div>'+
  '<label>Note (facoltative)</label><textarea id="fa-n" rows="2">'+esc(e?e.note||'':'')+'</textarea>'+
  '<div class="row" style="margin-top:16px"><button class="btn sp" id="fa-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>'+(e?'<button class="btn d" style="width:100%;margin-top:10px" id="fa-del">Elimina attività</button>':'');
+ var avzUpd=async function(){var box=$('#fa-avz'),az=+$('#fa-z').value,k=avzKey($('#fa-o').value),t=az?vigTot(az):{n:0};if(!k||!t.n){box.innerHTML='';box.dataset.k='';AVZCOV=[];return}
+  var key=az+'|'+k;if(box.dataset.k===key)return;box.dataset.k=key;var same=e&&e.avz_lavoro===k&&e.area_id===az;
+  box.innerHTML='<div class="card" style="margin:12px 0 0;padding:10px"><b>'+k+' · avanzamento</b><div class="grid2"><div><label>Filare raggiunto (1–'+t.n+')</label><input type="number" id="fa-fa" min="1" max="'+t.n+'" inputmode="numeric" value="'+(same&&e.filare_a!=null?e.filare_a:'')+'"></div><div><label>Partito dal filare</label><input type="number" id="fa-fd" min="1" max="'+t.n+'" inputmode="numeric" placeholder="automatico" value="'+(same&&e.filare_da!=null?e.filare_da:'')+'"></div></div><div class="mut" id="fa-cov" style="margin-top:6px">Carico i filari già fatti…</div></div>';
+  var yr=+($('#fa-d').value||today()).slice(0,4);var r=await sb.rpc('az_intervalli',{p_area:az,p_lavoro:k,p_anno:yr});if(box.dataset.k!==key)return;if(r.error){AVZCOV=[];$('#fa-cov').textContent='Esegui lo script 05_avanzamento.sql in Supabase per attivare l’avanzamento.';return}
+  AVZCOV=r.data;var rg=covRanges(covSet(AVZCOV));$('#fa-cov').textContent=rg?'Già fatti quest’anno: filari '+rg+'. Scrivi solo il filare a cui sei arrivato: se parti dall’altro lato del vigneto, scrivi un numero alto.':'Nessun filare ancora fatto quest’anno. Scrivi il filare a cui sei arrivato (se parti dalla fine, un numero alto).'};
  var fill=function(){var s=$('#fa-s').value;$('#fa-ol').innerHTML=opSuggest(s).map(function(x){return'<option value="'+esc(x)+'">'}).join('')};fill();
- $('#fa-s').onchange=function(){$('#fa-z').innerHTML=zoneOpts($('#fa-s').value,0);fill()};
+ $('#fa-s').onchange=function(){$('#fa-z').innerHTML=zoneOpts($('#fa-s').value,0);fill();avzUpd()};$('#fa-z').onchange=avzUpd;$('#fa-o').oninput=avzUpd;$('#fa-o').onchange=avzUpd;avzUpd();
  d.onclick=function(ev){var b=ev.target.closest('[data-hr]');if(!b)return;var h=$('#fa-h'),v=parseFloat(h.value)||0,k=b.dataset.hr;h.value=k==='x4'?4:k==='x8'?8:Math.max(0,Math.min(24,v+parseFloat(k)))};
  $('#fa-ok').onclick=function(){saveAtt(e,o)};if(e)$('#fa-del').onclick=function(){delAtt(e)};
  d.showModal()}
@@ -207,6 +212,7 @@ async function saveAtt(e,o){
  if(!dt||!op||!(ore>0)||!az)return toast('Compila data, zona, attività e ore.');
  if(ore>24)return toast('Le ore non possono superare 24.');
  var row={data:dt,operazione:op,area_id:az,ore:ore,note:$('#fa-n').value.trim()||null};
+ var kk=avzKey(op),tt=vigTot(az);if(kk&&tt.n&&$('#fa-fa')){var fa=parseInt($('#fa-fa').value,10);if(fa){if(fa<1||fa>tt.n)return toast('Il filare deve essere tra 1 e '+tt.n+'.');var fd=parseInt($('#fa-fd').value,10)||null;if(fd&&(fd<1||fd>tt.n))return toast('Il filare di partenza deve essere tra 1 e '+tt.n+'.');if(!fd)fd=(e&&e.avz_lavoro===kk&&e.area_id===az&&e.filare_da!=null)?e.filare_da:resolveDa(AVZCOV,tt.n,fa);row.filare_a=fa;row.filare_da=fd;row.avz_lavoro=kk}else if(e){row.filare_a=null;row.filare_da=null;row.avz_lavoro=null}}
  if(isM()){var u=$('#fa-u').value;if(u)row.user_id=u;else if(!e)return toast('Scegli il dipendente.')}else if(!e)row.user_id=S.user.id;
  var b=$('#fa-ok');b.disabled=true;
  try{var r;if(e){r=await sb.from('az_attivita').update(row).eq('id',e.id)}else{if(o&&o.pian){row.pian_id=o.pian;row.occorrenza=o.occ}r=await sb.from('az_attivita').insert(row)}
@@ -233,7 +239,7 @@ function vOggi(){var t=today(),h=new Date().getHours();var sal=h<13?'Buongiorno'
  '<h3>Registrato oggi</h3><div class="card">'+(mine.length?mine.map(attRow).join(''):'<span class="mut">Ancora niente. Tocca “Registra attività” per aggiungere il lavoro di oggi.</span>')+'</div>'+
  (soon.length?'<h3>Nei prossimi giorni</h3><div class="card">'+soon.map(oc).join('')+'</div>':'')+
  '<button class="btn fab" data-act="newatt">＋ Registra attività</button>'}
-function attRow(a){return'<div class="it"><div class="h">'+fore(a.ore)+'h</div><div class="sp"><div class="t">'+esc(a.operazione)+'</div><div class="mut">'+esc(areaLabel(a.area_id))+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}
+function attRow(a){return'<div class="it"><div class="h">'+fore(a.ore)+'h</div><div class="sp"><div class="t">'+esc(a.operazione)+'</div><div class="mut">'+esc(areaLabel(a.area_id))+(a.filare_a!=null?' · filari '+(a.filare_da!=null&&a.filare_da!==a.filare_a?a.filare_da+'→':'')+a.filare_a:'')+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}
 function vOre(){var y=S.ore.y,m=S.ore.m,mine=S.att;
  var yrs={};yrs[new Date().getFullYear()]=1;mine.forEach(function(a){yrs[a.data.slice(0,4)]=1});var ylist=Object.keys(yrs).sort().reverse();
  var per=[];for(var i=0;i<12;i++)per.push({h:0,g:{}});mine.forEach(function(a){if(+a.data.slice(0,4)===y){var k=+a.data.slice(5,7)-1;per[k].h+=Number(a.ore);per[k].g[a.data]=1}});
@@ -340,53 +346,80 @@ async function saveProf(id){var tr=document.querySelector('tr[data-p="'+id+'"]')
 
 /* ============ VIGNETO (fase 2) ============ */
 var FASI=['Pianto (germogliamento)','Punta verde','Foglie distese','Grappoli visibili','Fioritura','Allegagione','Chiusura grappolo','Invaiatura','Vendemmia','Caduta foglie'];
-var LAVORI=['Potatura','Legatura','Trinciatura','Spollonatura','Cimatura','Vendemmia'];
-S.vig={anno:new Date().getFullYear(),tab:'pan',filari:[],fasi:[],sost:[],avanz:[],err:null};
-async function loadVig(){try{
- S.vig.filari=await fetchAll(function(){return sb.from('az_filari').select('*').order('area_id').order('numero')});
+var AVZ=[['Potatura','potatura'],['Rimozione legna','rimozione legna'],['Legatura','legatura'],['Tirati su fili','tirati su']];
+var LAVORI=AVZ.map(function(x){return x[0]});
+var AVZCOV=[];
+S.vig={anno:new Date().getFullYear(),tab:'pan',layer:'var',filari:[],fasi:[],sost:[],err:null};
+function avzKey(op){var o=String(op||'').toLowerCase();for(var i=0;i<AVZ.length;i++)if(o.indexOf(AVZ[i][1])>=0)return AVZ[i][0];return null}
+async function loadFilari(){try{S.vig.filari=await fetchAll(function(){return sb.from('az_filari').select('*').order('area_id').order('numero')})}catch(e){S.vig.filari=[]}}
+async function loadVig(){try{await loadFilari();
  var q=async function(t){var r=await sb.from(t).select('*').limit(5000);if(r.error)throw r.error;return r.data};
- S.vig.fasi=await q('az_fasi_fen');S.vig.sost=await q('az_sostituzioni');S.vig.avanz=await q('az_avanzamento');S.vig.err=null}
+ S.vig.fasi=await q('az_fasi_fen');S.vig.sost=await q('az_sostituzioni');S.vig.err=null}
  catch(e){S.vig.err=e}}
 function vigAree(){var ids={};S.vig.filari.forEach(function(f){ids[f.area_id]=1});return S.aree.filter(function(a){return ids[a.id]})}
 function vigTot(aid){var fs=S.vig.filari.filter(function(f){return f.area_id===aid});return{n:fs.length,v:fs.reduce(function(s,f){return s+f.n_vigne},0),fs:fs}}
-function vigPct(aid,lavoro){var t=vigTot(aid),a=S.vig.avanz.find(function(x){return x.anno===S.vig.anno&&x.area_id===aid&&x.lavoro===lavoro});if(!a||!t.v)return 0;var done=t.fs.filter(function(f){return f.numero<=a.filari_fatti}).reduce(function(s,f){return s+f.n_vigne},0);return done/t.v}
+function covSet(iv){var s={};iv.forEach(function(x){if(x.a==null)return;var lo=Math.min(x.da==null?x.a:x.da,x.a),hi=Math.max(x.da==null?x.a:x.da,x.a);for(var i=lo;i<=hi;i++)s[i]=1});return s}
+function covRanges(s){var k=Object.keys(s).map(Number).sort(function(a,b){return a-b}),o=[],i=0;while(i<k.length){var j=i;while(j+1<k.length&&k[j+1]===k[j]+1)j++;o.push(k[i]===k[j]?String(k[i]):k[i]+'–'+k[j]);i=j+1}return o.join(', ')}
+function resolveDa(iv,n,r){var s=covSet(iv),ks=Object.keys(s).map(Number);if(s[r])return r;if(!ks.length)return r>n/2?n:1;var c=ks.reduce(function(b,x){return Math.abs(x-r)<Math.abs(b-r)?x:b},ks[0]);return c+(r>c?1:-1)}
+function attIv(aid,lav,y){return S.att.filter(function(a){return a.area_id===aid&&a.avz_lavoro===lav&&a.filare_a!=null&&a.data.slice(0,4)===String(y)}).map(function(a){return{da:a.filare_da,a:a.filare_a}})}
+function vigPct(aid,lav){var t=vigTot(aid);if(!t.v)return 0;var s=covSet(attIv(aid,lav,S.vig.anno));return t.fs.filter(function(f){return s[f.numero]}).reduce(function(x,f){return x+f.n_vigne},0)/t.v}
 function vVig(){var V=S.vig,y=V.anno;
- if(V.err){var m=V.err.message||'';return'<h2>Vigneto</h2><div class="card"><p>'+(/does not exist|schema cache|42P01/i.test(m+(V.err.code||''))?'Il database non ha ancora le tabelle del vigneto: esegui lo script <b>04_vigneto.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.':'Errore: '+esc(m))+'</p></div>'}
+ if(V.err){var m=V.err.message||'';return'<h2>Vigneto</h2><div class="card"><p>'+(/does not exist|schema cache|42P01/i.test(m+(V.err.code||''))?'Il database non ha ancora le tabelle del vigneto: esegui gli script <b>04_vigneto.sql</b> e <b>05_avanzamento.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.':'Errore: '+esc(m))+'</p></div>'}
  var yrs=[];for(var i=new Date().getFullYear()+1;i>=2022;i--)yrs.push(i);
  var head='<div class="row"><h2 class="sp">Vigneto e campagna</h2><select id="vg-y" style="width:auto">'+yrs.map(function(v){return'<option'+(v===y?' selected':'')+'>'+v+'</option>'}).join('')+'</select></div>'+
-  '<div class="chips">'+[['pan','Panoramica'],['fasi','Fasi fenologiche'],['sost','Viti da sostituire'],['fil','Filari']].map(function(t){return'<button class="chip'+(V.tab===t[0]?' on':'')+'" data-vtab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</div>';
- return head+({pan:vigPan,fasi:vigFasi,sost:vigSost,fil:vigFil}[V.tab])()}
+  '<div class="chips">'+[['pan','Panoramica'],['map','Mappa'],['fasi','Fasi fenologiche'],['sost','Viti da sostituire'],['fil','Filari']].map(function(t){return'<button class="chip'+(V.tab===t[0]?' on':'')+'" data-vtab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</div>';
+ return head+({pan:vigPan,map:vigMap,fasi:vigFasi,sost:vigSost,fil:vigFil}[V.tab])()}
 function vigPan(){var V=S.vig,y=V.anno,ar=vigAree(),tv=0,tn=0;ar.forEach(function(a){var t=vigTot(a.id);tv+=t.v;tn+=t.n});
  var sy=V.sost.filter(function(s){return s.anno===y}),sd=sy.filter(function(s){return s.stato==='da_fare'}).reduce(function(s,x){return s+x.n_vigne},0),sf=sy.filter(function(s){return s.stato==='fatto'}).reduce(function(s,x){return s+x.n_vigne},0);
  var out='<div class="grid4"><div class="kpi"><b>'+ar.length+'</b><span>vigneti</span></div><div class="kpi"><b>'+tn+'</b><span>filari</span></div><div class="kpi"><b>'+tv.toLocaleString('it-IT')+'</b><span>viti</span></div><div class="kpi"><b>'+sd+'</b><span>viti da sostituire nel '+y+(sf?' ('+sf+' fatte)':'')+'</span></div></div>';
  ar.forEach(function(a){var t=vigTot(a.id),f=V.fasi.filter(function(x){return x.anno===y&&x.area_id===a.id}).sort(function(p,q){return p.data<q.data?1:-1})[0];
-  var bars=LAVORI.map(function(l){var p=vigPct(a.id,l);return'<div class="hb" data-tip="'+esc(a.nome+' · '+l)+'<br><b>'+Math.round(p*100)+'%</b>"><span class="lb">'+l+'</span><span class="tr"><span class="fl" style="display:block;width:'+p*100+'%"></span></span><span class="v">'+Math.round(p*100)+'%</span></div>'}).join('');
-  out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+(a.ettari?fore(a.ettari)+' ha · ':'')+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span><button class="btn g sm" data-vavz="'+a.id+'">Aggiorna avanzamento</button></div>'+
+  var bars=LAVORI.map(function(l){var iv=attIv(a.id,l,y),p=vigPct(a.id,l),rg=covRanges(covSet(iv));return'<div class="hb" data-tip="'+esc(a.nome+' · '+l)+'<br><b>'+Math.round(p*100)+'%</b>'+(rg?'<br>filari '+rg:'')+'"><span class="lb">'+l+'</span><span class="tr"><span class="fl" style="display:block;width:'+p*100+'%"></span></span><span class="v">'+Math.round(p*100)+'%</span></div>'}).join('');
+  out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+(a.ettari?fore(a.ettari)+' ha · ':'')+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span></div>'+
    '<p class="mut" style="margin:4px 0 8px">'+(f?'Ultima fase: <b>'+esc(f.fase)+'</b> ('+fdate(f.data)+')':'Nessuna fase registrata nel '+y)+'</p>'+bars+'</div>'});
- return out+'<p class="mut">La percentuale conta le viti dei filari già completati, dal filare 1 fino al filare che indichi in “Aggiorna avanzamento”.</p>'}
+ return out+'<p class="mut">L’avanzamento si calcola da solo dalle attività (potatura, rimozione legna, legatura, tirati su fili) in cui chi lavora indica il filare raggiunto. Conta le viti dei filari coperti, anche se più persone lavorano insieme o partono da lati diversi.</p>'}
+var VCOL=['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)'];
+function vigMap(){var V=S.vig,y=V.anno,ly=V.layer,ar=vigAree();
+ var opts=[['var','Varietà']].concat(LAVORI.map(function(l){return[l,l]})).concat([['morte','Viti morte']]);
+ var out='<div class="chips">'+opts.map(function(o){return'<button class="chip'+(ly===o[0]?' on':'')+'" data-vlayer="'+o[0]+'">'+o[1]+'</button>'}).join('')+'</div>';
+ ar.forEach(function(a){var t=vigTot(a.id),mx=t.fs.reduce(function(m,f){return Math.max(m,f.n_vigne)},1),W=600,L=34,RH=6,G=1.5,H=t.n*(RH+G)+8,vs=[];
+  t.fs.forEach(function(f){if(f.varieta&&vs.indexOf(f.varieta)<0)vs.push(f.varieta)});
+  var cov=LAVORI.indexOf(ly)>=0?covSet(attIv(a.id,ly,y)):null,sost=V.sost.filter(function(s){return s.anno===y&&s.area_id===a.id}),svg='';
+  t.fs.forEach(function(f,i){var yy=4+i*(RH+G),w=Math.max(2,f.n_vigne/mx*(W-L-8)),col,st;
+   var ss=sost.filter(function(s){return s.filare===f.numero}),dd=ss.filter(function(s){return s.stato==='da_fare'}).reduce(function(x,s){return x+s.n_vigne},0),ff=ss.filter(function(s){return s.stato==='fatto'}).reduce(function(x,s){return x+s.n_vigne},0);
+   if(ly==='var'){col=VCOL[Math.max(0,vs.indexOf(f.varieta))%5];st=f.varieta||''}
+   else if(cov){col=cov[f.numero]?'var(--acc)':'var(--line)';st=cov[f.numero]?'fatto':'non fatto'}
+   else{col=dd?'var(--warn)':ff?'var(--acc)':'var(--line)';st=(dd?dd+' da sostituire':'')+(dd&&ff?' · ':'')+(ff?ff+' sostituite':'')||'nessuna'}
+   if(f.numero%10===0||f.numero===1)svg+='<text x="'+(L-4)+'" y="'+(yy+RH)+'" text-anchor="end">'+f.numero+'</text>';
+   svg+='<rect x="'+L+'" y="'+yy+'" width="'+w+'" height="'+RH+'" rx="2" fill="'+col+'" data-tip="Filare '+f.numero+'<br>'+f.n_vigne+' viti'+(f.varieta?' · '+esc(f.varieta):'')+'<br><b>'+esc(st)+'</b>"/>'});
+  var leg=ly==='var'?vs.map(function(v,i){return'<span><i style="background:'+VCOL[i%5]+'"></i>'+esc(v)+'</span>'}).join(''):cov?'<span><i style="background:var(--acc)"></i>fatto</span><span><i style="background:var(--line)"></i>non ancora</span>':'<span><i style="background:var(--warn)"></i>da sostituire</span><span><i style="background:var(--acc)"></i>sostituite</span><span><i style="background:var(--line)"></i>nessuna</span>';
+  out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+t.n+' filari · ogni barra è un filare, lunga quanto le sue viti</span></div><div class="leg">'+leg+'</div><svg class="ch" viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:640px;display:block">'+svg+'</svg></div>'});
+ return out}
 function vigFasi(){var V=S.vig,y=V.anno,ar=vigAree();
- return'<div class="card scroll"><table><tr><th>Fase</th>'+ar.map(function(a){return'<th>'+esc(a.nome)+'</th>'}).join('')+'</tr>'+FASI.map(function(f,i){return'<tr><td>'+esc(f)+'</td>'+ar.map(function(a){var x=V.fasi.find(function(z){return z.anno===y&&z.area_id===a.id&&z.fase===f});return'<td><input type="date" data-fase="'+i+'|'+a.id+'" value="'+(x?x.data:'')+'" style="min-width:140px"></td>'}).join('')+'</tr>'}).join('')+'</table></div><p class="mut">Inserisci la data in cui la fase è stata osservata in ogni vigneto: si salva da sola. Svuota la data per cancellarla. Il confronto tra anni ti aiuta a prevedere trattamenti e vendemmia.</p>'+
+ return'<div class="card scroll"><table><tr><th>Fase</th>'+ar.map(function(a){return'<th>'+esc(a.nome)+'</th>'}).join('')+'</tr>'+FASI.map(function(f,i){return'<tr><td>'+esc(f)+'</td>'+ar.map(function(a){var x=V.fasi.find(function(z){return z.anno===y&&z.area_id===a.id&&z.fase===f});return'<td><input type="date" data-fase="'+i+'|'+a.id+'" value="'+(x?x.data:'')+'" style="min-width:140px"></td>'}).join('')+'</tr>'}).join('')+'</table></div><p class="mut">Inserisci la data in cui la fase è stata osservata in ogni vigneto: si salva da sola. Svuota la data per cancellarla.</p>'+
  (function(){var rows=[];ar.forEach(function(a){FASI.forEach(function(f){var cur=V.fasi.find(function(z){return z.anno===y&&z.area_id===a.id&&z.fase===f});var prev=V.fasi.filter(function(z){return z.anno<y&&z.area_id===a.id&&z.fase===f}).sort(function(p,q){return q.anno-p.anno})[0];if(cur&&prev){var d=Math.round((pd(cur.data)-pd(prev.data.replace(/^\d{4}/,String(y))))/864e5);rows.push('<tr><td>'+esc(a.nome)+'</td><td>'+esc(f)+'</td><td class="n">'+(d>0?'+':'')+d+' giorni</td><td>rispetto al '+prev.anno+'</td></tr>')}})});
  return rows.length?'<div class="card"><h3>Confronto con l’anno precedente</h3><div class="scroll"><table>'+rows.join('')+'</table></div></div>':''})()}
-function vigSost(){var V=S.vig,y=V.anno,rows=V.sost.filter(function(s){return s.anno===y}).sort(function(a,b){return a.stato<b.stato?-1:a.stato>b.stato?1:(a.filare||0)-(b.filare||0)});
- var byA=group2(rows);
- return'<div class="row"><p class="mut sp" style="margin:0">Viti morte da sostituire nel '+y+'.</p><button class="btn" data-act="newsost">+ Aggiungi</button></div>'+
- (byA?'<div class="card"><h3>Riepilogo</h3><div class="scroll"><table><tr><th>Vigneto</th><th class="n">Da fare</th><th class="n">Fatte</th></tr>'+byA+'</table></div></div>':'')+
- '<div class="card scroll"><table><tr><th>Vigneto</th><th class="n">Filare</th><th class="n">Viti</th><th>Stato</th><th>Note</th><th></th></tr>'+(rows.length?rows.map(function(s){return'<tr><td>'+esc(areaLabel(s.area_id).replace('Vigneto · ',''))+'</td><td class="n">'+(s.filare||'—')+'</td><td class="n">'+s.n_vigne+'</td><td><span class="tag'+(s.stato==='fatto'?'':' w')+'">'+(s.stato==='fatto'?'Fatto':'Da fare')+'</span></td><td>'+esc(s.note||'')+'</td><td style="white-space:nowrap"><button class="btn g sm" data-sstato="'+s.id+'">'+(s.stato==='fatto'?'Riapri':'Segna fatto')+'</button> <button class="btn d sm" data-sdel="'+s.id+'">×</button></td></tr>'}).join(''):'<tr><td colspan="6" class="mut">Nessuna voce per il '+y+'.</td></tr>')+'</table></div>'}
-function group2(rows){var m={};rows.forEach(function(s){var k=s.area_id;m[k]=m[k]||{d:0,f:0};m[k][s.stato==='fatto'?'f':'d']+=s.n_vigne});return Object.keys(m).map(function(k){return'<tr><td>'+esc(areaLabel(+k).replace('Vigneto · ',''))+'</td><td class="n">'+m[k].d+'</td><td class="n">'+m[k].f+'</td></tr>'}).join('')}
-function vigFil(){var out='';vigAree().forEach(function(a){var t=vigTot(a.id);out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span></div><div class="scroll" style="max-height:260px;overflow-y:auto"><table><tr><th class="n">Filare</th><th class="n">Viti</th><th>Varietà</th></tr>'+t.fs.map(function(f){return'<tr><td class="n">'+f.numero+'</td><td class="n">'+f.n_vigne+'</td><td>'+esc(f.varieta||'')+'</td></tr>'}).join('')+'</table></div></div>'});
- return out+'<p class="mut">Dati dalla tua piantina Excel. Bardolino: Rondinella filari 1–12, Corvina 13–67, Merlot/Corvina 68–105 (da verificare).</p>'}
-function openAvz(aid){var a=area(aid),t=vigTot(aid),d=$('#dlg');d.onclick=null;
- d.innerHTML='<h3>'+esc(a.nome)+' · avanzamento '+S.vig.anno+'</h3><p class="mut">Indica fino a quale filare (1–'+t.n+') il lavoro è completato. 0 = non iniziato.</p>'+LAVORI.map(function(l,i){var x=S.vig.avanz.find(function(z){return z.anno===S.vig.anno&&z.area_id===aid&&z.lavoro===l});return'<label>'+l+'</label><input type="number" min="0" max="'+t.n+'" id="av'+i+'" value="'+(x?x.filari_fatti:0)+'">'}).join('')+'<div class="row" style="margin-top:16px"><button class="btn" id="av-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>';
- $('#av-ok').onclick=async function(){var rows=LAVORI.map(function(l,i){return{anno:S.vig.anno,area_id:aid,lavoro:l,filari_fatti:Math.max(0,Math.min(t.n,+$('#av'+i).value||0)),aggiornato:new Date().toISOString()}});var r=await sb.from('az_avanzamento').upsert(rows,{onConflict:'anno,area_id,lavoro'});if(r.error)return fail(r.error);await loadVig();d.close();view();toast('Salvato ✓')};d.showModal()}
+function vigSost(){var V=S.vig,y=V.anno,ar=vigAree(),any=false;
+ var out='<div class="row"><p class="mut sp" style="margin:0">Viti morte da sostituire nel '+y+', filare per filare.</p><button class="btn" data-act="newsost">+ Aggiungi</button></div>';
+ ar.forEach(function(a){var rows=V.sost.filter(function(s){return s.anno===y&&s.area_id===a.id}).sort(function(p,q){return(p.filare||0)-(q.filare||0)||(p.stato<q.stato?-1:1)});if(!rows.length)return;any=true;
+  var d=rows.filter(function(s){return s.stato==='da_fare'}).reduce(function(x,s){return x+s.n_vigne},0),f=rows.filter(function(s){return s.stato==='fatto'}).reduce(function(x,s){return x+s.n_vigne},0);
+  var bv={};rows.forEach(function(s){var k=s.varieta||'—';bv[k]=bv[k]||{d:0,f:0};bv[k][s.stato==='fatto'?'f':'d']+=s.n_vigne});
+  out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="tag w">'+d+' da fare</span><span class="tag">'+f+' fatte</span></div>'+(Object.keys(bv).length>1?'<p class="mut" style="margin:6px 0">'+Object.keys(bv).map(function(k){return esc(k)+': '+bv[k].d+' da fare, '+bv[k].f+' fatte'}).join(' · ')+'</p>':'')+
+  '<div class="scroll"><table><tr><th class="n">Filare</th><th>Varietà</th><th class="n">Viti</th><th>Stato</th><th>Note</th><th></th></tr>'+rows.map(function(s){return'<tr><td class="n">'+(s.filare||'—')+'</td><td>'+esc(s.varieta||'')+'</td><td class="n">'+s.n_vigne+'</td><td><span class="tag'+(s.stato==='fatto'?'':' w')+'">'+(s.stato==='fatto'?'Fatto'+(s.data_fatto?' '+fdate(s.data_fatto):''):'Da fare')+'</span></td><td>'+esc(s.note||'')+'</td><td style="white-space:nowrap"><button class="btn g sm" data-sstato="'+s.id+'">'+(s.stato==='fatto'?'Riapri':'Segna fatto')+'</button> <button class="btn d sm" data-sdel="'+s.id+'">×</button></td></tr>'}).join('')+'</table></div></div>'});
+ return out+(any?'':'<div class="card mut">Nessuna vite da sostituire registrata per il '+y+'.</div>')}
+function vigFil(){var out='';vigAree().forEach(function(a){var t=vigTot(a.id);out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span></div><div class="scroll" style="max-height:260px;overflow-y:auto"><table><tr><th class="n">Filare</th><th class="n">Viti</th><th>Varietà</th></tr>'+t.fs.map(function(f){return'<tr><td class="n">'+f.numero+'</td><td class="n">'+f.n_vigne+'</td><td>'+esc(f.varieta||'')+'</td></tr>'}).join('')+'</table></div></div>'});return out}
 function openSost(){var d=$('#dlg');d.onclick=null;var ar=vigAree();
- d.innerHTML='<h3>Viti da sostituire · '+S.vig.anno+'</h3><label>Vigneto</label><select id="ss-a">'+ar.map(function(a){return'<option value="'+a.id+'">'+esc(a.nome)+'</option>'}).join('')+'</select><div class="grid2"><div><label>Filare (facoltativo)</label><input type="number" id="ss-f" min="1"></div><div><label>Numero di viti</label><input type="number" id="ss-n" min="1" value="1"></div></div><label>Note</label><input id="ss-t" placeholder="es. zona bassa, vite secca"><div class="row" style="margin-top:16px"><button class="btn" id="ss-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>';
- $('#ss-ok').onclick=async function(){var n=+$('#ss-n').value;if(!(n>0))return toast('Indica quante viti.');var r=await sb.from('az_sostituzioni').insert({anno:S.vig.anno,area_id:+$('#ss-a').value,filare:+$('#ss-f').value||null,n_vigne:n,note:$('#ss-t').value.trim()||null});if(r.error)return fail(r.error);await loadVig();d.close();view();toast('Aggiunto ✓')};d.showModal()}
+ d.innerHTML='<h3>Viti da sostituire · '+S.vig.anno+'</h3><label>Vigneto</label><select id="ss-a">'+ar.map(function(a){return'<option value="'+a.id+'">'+esc(a.nome)+'</option>'}).join('')+'</select><label>Filare</label><input type="number" id="ss-f" min="1" inputmode="numeric"><div id="ss-v" class="mut" style="margin-top:8px">Scrivi il numero del filare.</div><label>Note</label><input id="ss-t" placeholder="es. zona bassa, vite secca"><div class="row" style="margin-top:16px"><button class="btn" id="ss-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>';
+ var fil=function(){var aid=+$('#ss-a').value,n=+$('#ss-f').value;return S.vig.filari.find(function(f){return f.area_id===aid&&f.numero===n})};
+ var upd=function(){var f=fil(),b=$('#ss-v');if(!f){b.innerHTML=$('#ss-f').value?'Filare non trovato in questo vigneto.':'Scrivi il numero del filare.';return}
+  var vs=f.varieta==='Merlot/Corvina'?['Corvina','Merlot']:[f.varieta||'Viti'];
+  b.innerHTML='<div class="mut">Filare '+f.numero+' · '+f.n_vigne+' viti · '+esc(f.varieta||'')+'</div><div class="grid2">'+vs.map(function(v,i){return'<div><label>'+(vs.length>1?'Viti morte di '+v:'Viti morte')+'</label><input type="number" min="0" class="ss-n" data-v="'+esc(v)+'" inputmode="numeric" value="'+(vs.length>1?0:1)+'"></div>'}).join('')+'</div>'};
+ $('#ss-f').oninput=upd;$('#ss-a').onchange=upd;
+ $('#ss-ok').onclick=async function(){var f=fil();if(!f)return toast('Indica un filare valido.');var rows=[];document.querySelectorAll('.ss-n').forEach(function(i){var n=parseInt(i.value,10);if(n>0)rows.push({anno:S.vig.anno,area_id:f.area_id,filare:f.numero,varieta:i.dataset.v==='Viti'?(f.varieta||null):i.dataset.v,n_vigne:n,note:$('#ss-t').value.trim()||null})});if(!rows.length)return toast('Indica quante viti.');var r=await sb.from('az_sostituzioni').insert(rows);if(r.error)return fail(r.error);await loadVig();d.close();view();toast('Aggiunto ✓')};d.showModal()}
 
 /* ============ EVENTI ============ */
 document.addEventListener('click',async function(ev){var t=ev.target,b;
  if(b=t.closest('[data-vtab]')){S.vig.tab=b.dataset.vtab;view();return}
- if(b=t.closest('[data-vavz]')){openAvz(+b.dataset.vavz);return}
+ if(b=t.closest('[data-vlayer]')){S.vig.layer=b.dataset.vlayer;view();return}
  if(b=t.closest('[data-sstato]')){var sx=S.vig.sost.find(function(z){return z.id===+b.dataset.sstato}),fa=sx.stato==='fatto';var rr=await sb.from('az_sostituzioni').update({stato:fa?'da_fare':'fatto',data_fatto:fa?null:today()}).eq('id',sx.id);if(rr.error)return fail(rr.error);await loadVig();view();return}
  if(b=t.closest('[data-sdel]')){if(!confirm('Eliminare questa voce?'))return;var r2=await sb.from('az_sostituzioni').delete().eq('id',+b.dataset.sdel);if(r2.error)return fail(r2.error);await loadVig();view();return}
  if(b=t.closest('[data-go]')){S.view=b.dataset.go;view();window.scrollTo(0,0);return}
