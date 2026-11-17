@@ -73,7 +73,7 @@ svg.ch text{fill:var(--mut);font-size:11px}svg.ch .gr{stroke:var(--line);stroke-
 var SB_URL='https://sjtwtodkdmhzmueywqxv.supabase.co';
 var SB_KEY='sb_publishable_WO1CQXZT685l2iLM2CYzMw_f6Dr_62z';
 var SETTORI=['Vigneto','Oliveto','Agriturismo','Rimessaggio','Appartamenti Brenzone','Camporengo','Bosco e tartufaia','Altro'];
-var PRESET={'Vigneto':['Potatura secca','Legatura','Spollonatura','Scacchiatura','Cimatura','Sfalcio interfila','Trinciatura','Diserbo','Trattamento','Tirati su fili','Sostituzione vigne morte','Piantagione nuove vigne','Irrigazione','Vendemmia'],
+var PRESET={'Vigneto':['Potatura','Rimozione legna','Legatura','Spalmatura','Cimatura','Trincia nel vigneto','Trattamento','Diserbo','Tirati su fili','Piantate vigne nuove','Tolte vigne morte','Irrigazione','Vendemmia','Decespugliatore','Battecche vigne nuove','Manutenzione trattori','Concimazione','Altro'],
 'Oliveto':['Potatura olivi','Raccolta olive','Sfalcio','Concimazione','Trattamento'],
 'Agriturismo':['Pulizia terrazze','Pulizia piscine','Taglio erba','Piccole manutenzioni'],
 'Rimessaggio':['Spostamento mezzi','Pulizia piazzale','Taglio erba','Piccole manutenzioni'],
@@ -113,7 +113,9 @@ var S={user:null,prof:null,aree:[],att:[],pian:[],fatti:[],profili:[],view:'',
 function isM(){return S.prof&&S.prof.ruolo==='master'}
 function area(id){return S.aree.find(function(a){return a.id===id})}
 function settoreDi(a){var r=area(a.area_id);return r?r.settore:'Altro'}
-function zonaDi(a){var r=area(a.area_id);return r?r.nome:''}
+function zonaDi(a){if(a.tutta_campagna)return'Tutta la campagna';var r=area(a.area_id);return r?r.nome:''}
+function zoneLbl(a){return a.tutta_campagna?'Vigneto · Tutta la campagna':areaLabel(a.area_id)}
+function spreadZ(rows){var vs=S.aree.filter(function(x){return x.settore==='Vigneto'&&x.ettari>0}),tot=vs.reduce(function(t,x){return t+Number(x.ettari)},0),m={};rows.forEach(function(a){var h=Number(a.ore);if(a.tutta_campagna&&tot)vs.forEach(function(v){var k=areaLabel(v.id);m[k]=(m[k]||0)+h*Number(v.ettari)/tot});else{var k2=areaLabel(a.area_id);m[k2]=(m[k2]||0)+h}});return Object.keys(m).map(function(k){return{k:k,v:m[k]}}).sort(function(a,b){return b.v-a.v})}
 function areaLabel(id){var r=area(id);if(!r)return'—';return r.settore===r.nome?r.settore:r.settore+' · '+r.nome}
 function nomeUtente(id){var p=S.profili.find(function(x){return x.id===id});return p?p.nome:''}
 
@@ -184,7 +186,7 @@ function view(){
 function opSuggest(sett){var seen={},out=[];(PRESET[sett]||[]).forEach(function(o){seen[o.toLowerCase()]=1;out.push(o)});
  var cnt={};S.att.forEach(function(a){if(settoreDi(a)===sett){var k=a.operazione.trim();if(k.length<40){var l=k.toLowerCase();cnt[l]=cnt[l]||{n:0,t:k};cnt[l].n++}}});
  Object.keys(cnt).sort(function(a,b){return cnt[b].n-cnt[a].n}).slice(0,25).forEach(function(l){if(!seen[l]){seen[l]=1;out.push(cnt[l].t)}});return out}
-function zoneOpts(sett,sel){return S.aree.filter(function(a){return a.settore===sett}).map(function(a){return'<option value="'+a.id+'"'+(a.id===sel?' selected':'')+'>'+esc(a.nome)+'</option>'}).join('')}
+function zoneOpts(sett,sel){var camp=sett==='Vigneto'?'<option value="campagna"'+(sel==='campagna'?' selected':'')+'>Tutta la campagna (tutti i vigneti)</option>':'';return camp+S.aree.filter(function(a){return a.settore===sett&&!(sett==='Vigneto'&&!(a.ettari>0)&&a.id!==sel)}).map(function(a){return'<option value="'+a.id+'"'+(a.id===sel?' selected':'')+'>'+esc(a.nome)+'</option>'}).join('')}
 function openAtt(o){o=o||{};var e=o.edit,ar=e&&area(e.area_id);
  var sett=ar?ar.settore:(o.settore||SETTORI[0]);
  try{if(!ar&&!o.settore)sett=localStorage.getItem('az_ult_sett')||SETTORI[0]}catch(x){}
@@ -192,8 +194,8 @@ function openAtt(o){o=o||{};var e=o.edit,ar=e&&area(e.area_id);
  if(master){var cur=e?e.user_id:S.user.id;who='<label>Dipendente</label><select id="fa-u">'+(e&&!e.user_id?'<option value="">'+esc(e.operatore)+' (storico)</option>':'')+S.profili.filter(function(p){return p.attivo}).map(function(p){return'<option value="'+p.id+'"'+(p.id===cur?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('')+'</select>'}
  var d=$('#dlg');d.innerHTML='<h3>'+(e?'Modifica attività':(o.pian?'Segna come fatto':'Registra attività'))+'</h3>'+who+
  '<label>Data</label><input id="fa-d" type="date" value="'+(e?e.data:(o.data||today()))+'" max="'+addDays(today(),0)+'">'+
- '<div class="grid2"><div><label>Settore</label><select id="fa-s">'+SETTORI.map(function(s){return'<option'+(s===sett?' selected':'')+'>'+s+'</option>'}).join('')+'</select></div><div><label>Zona</label><select id="fa-z">'+zoneOpts(sett,ar?ar.id:(o.area_id||0))+'</select></div></div>'+
- '<label>Cosa hai fatto</label><input id="fa-o" list="fa-ol" value="'+esc(e?e.operazione:(o.op||''))+'" placeholder="es. Potatura secca" autocomplete="off"><datalist id="fa-ol"></datalist><div id="fa-avz"></div>'+
+ '<div class="grid2"><div><label>Settore</label><select id="fa-s">'+SETTORI.map(function(s){return'<option'+(s===sett?' selected':'')+'>'+s+'</option>'}).join('')+'</select></div><div><label>Zona</label><select id="fa-z">'+zoneOpts(sett,ar?(e.tutta_campagna?'campagna':ar.id):(o.area_id||0))+'</select></div></div>'+
+ '<label>Cosa hai fatto</label><div id="fa-ow"></div><div id="fa-altw"></div><div id="fa-avz"></div><div id="fa-prod"></div>'+
  '<label>Ore lavorate</label><div class="row"><button class="btn g sm" type="button" data-hr="-0.5">−</button><input id="fa-h" type="number" step="0.25" min="0" max="24" inputmode="decimal" style="width:90px;text-align:center" value="'+(e?e.ore:'')+'" placeholder="0"><button class="btn g sm" type="button" data-hr="0.5">+</button><button class="btn g sm" type="button" data-hr="x4">4 h</button><button class="btn g sm" type="button" data-hr="x8">8 h</button></div>'+
  '<label>Note (facoltative)</label><textarea id="fa-n" rows="2">'+esc(e?e.note||'':'')+'</textarea>'+
  '<div class="row" style="margin-top:16px"><button class="btn sp" id="fa-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>'+(e?'<button class="btn d" style="width:100%;margin-top:10px" id="fa-del">Elimina attività</button>':'');
@@ -202,16 +204,29 @@ function openAtt(o){o=o||{};var e=o.edit,ar=e&&area(e.area_id);
   box.innerHTML='<div class="card" style="margin:12px 0 0;padding:10px"><b>'+k+' · avanzamento</b><div class="grid2"><div><label>Filare raggiunto (1–'+t.n+')</label><input type="number" id="fa-fa" min="1" max="'+t.n+'" inputmode="numeric" value="'+(same&&e.filare_a!=null?e.filare_a:'')+'"></div><div><label>Partito dal filare</label><input type="number" id="fa-fd" min="1" max="'+t.n+'" inputmode="numeric" placeholder="automatico" value="'+(same&&e.filare_da!=null?e.filare_da:'')+'"></div></div><div class="mut" id="fa-cov" style="margin-top:6px">Carico i filari già fatti…</div></div>';
   var yr=+($('#fa-d').value||today()).slice(0,4);var r=await sb.rpc('az_intervalli',{p_area:az,p_lavoro:k,p_anno:yr});if(box.dataset.k!==key)return;if(r.error){AVZCOV=[];$('#fa-cov').textContent='Esegui lo script 05_avanzamento.sql in Supabase per attivare l’avanzamento.';return}
   AVZCOV=r.data;var rg=covRanges(covSet(AVZCOV));$('#fa-cov').textContent=rg?'Già fatti quest’anno: filari '+rg+'. Scrivi solo il filare a cui sei arrivato: se parti dall’altro lato del vigneto, scrivi un numero alto.':'Nessun filare ancora fatto quest’anno. Scrivi il filare a cui sei arrivato (se parti dalla fine, un numero alto).'};
- var fill=function(){var s=$('#fa-s').value;$('#fa-ol').innerHTML=opSuggest(s).map(function(x){return'<option value="'+esc(x)+'">'}).join('')};fill();
- $('#fa-s').onchange=function(){$('#fa-z').innerHTML=zoneOpts($('#fa-s').value,0);fill();avzUpd()};$('#fa-z').onchange=avzUpd;$('#fa-o').oninput=avzUpd;$('#fa-o').onchange=avzUpd;avzUpd();
+ var PRODRE=/trattamento|diserbo|concimazione/;
+ var altUpd=function(){var w=$('#fa-altw'),v=$('#fa-o').value;if(v!=='Altro'){w.innerHTML='';return}if(!$('#fa-alt'))w.innerHTML='<label>Quale attività? (obbligatorio)</label><input id="fa-alt" placeholder="descrivi l\'attività" value="'+esc(altInit)+'">'};
+ var prodUpd=function(){var w=$('#fa-prod'),v=($('#fa-o').value||'').toLowerCase(),m=v.indexOf('altro')===0?null:v.match(PRODRE);if(!m){w.innerHTML='';w.dataset.k='';return}if(w.dataset.k)return;w.dataset.k='1';
+  w.innerHTML='<div class="card" style="margin:12px 0 0;padding:10px"><b>Prodotto utilizzato</b><label>Nome del prodotto</label><input id="fa-pr" placeholder="es. rame, glifosate, NPK 15-15-15" value="'+esc(e&&e.prodotto?e.prodotto:'')+'"><label>Dose / quantità</label><input id="fa-ds" placeholder="es. 2 l/ha, 30 kg totali" value="'+esc(e&&e.dose?e.dose:'')+'"></div>'};
+ var opChange=function(){avzUpd();altUpd();prodUpd()};
+ var altInit=e&&/^Altro: /.test(e.operazione)?e.operazione.slice(7):'';
+ var setOp=function(sv,val){var w=$('#fa-ow');if(sv==='Vigneto'){var base=/^Altro: /.test(val)?'Altro':val,L=PRESET.Vigneto;w.innerHTML='<select id="fa-o"><option value="">Scegli l\'attività…</option>'+L.map(function(x){return'<option'+(x===base?' selected':'')+'>'+esc(x)+'</option>'}).join('')+(base&&L.indexOf(base)<0?'<option selected>'+esc(base)+'</option>':'')+'</select>'}
+  else{w.innerHTML='<input id="fa-o" list="fa-ol" value="'+esc(val)+'" placeholder="es. Potatura olivi" autocomplete="off"><datalist id="fa-ol">'+opSuggest(sv).map(function(x){return'<option value="'+esc(x)+'">'}).join('')+'</datalist>'}
+  $('#fa-o').oninput=opChange;$('#fa-o').onchange=opChange;$('#fa-altw').innerHTML='';$('#fa-prod').innerHTML='';$('#fa-prod').dataset.k='';$('#fa-avz').dataset.k='';opChange()};
+ setOp(sett,e?e.operazione:(o.op||''));
+ $('#fa-s').onchange=function(){var ns=$('#fa-s').value,cv=$('#fa-o')?$('#fa-o').value:'';$('#fa-z').innerHTML=zoneOpts(ns,0);setOp(ns,ns==='Vigneto'?'':cv)};$('#fa-z').onchange=avzUpd;
  d.onclick=function(ev){var b=ev.target.closest('[data-hr]');if(!b)return;var h=$('#fa-h'),v=parseFloat(h.value)||0,k=b.dataset.hr;h.value=k==='x4'?4:k==='x8'?8:Math.max(0,Math.min(24,v+parseFloat(k)))};
  $('#fa-ok').onclick=function(){saveAtt(e,o)};if(e)$('#fa-del').onclick=function(){delAtt(e)};
  d.showModal()}
+var PRODRE0=/trattamento|diserbo|concimazione/;
 async function saveAtt(e,o){
- var ore=parseFloat($('#fa-h').value),op=$('#fa-o').value.trim(),dt=$('#fa-d').value,az=parseInt($('#fa-z').value,10);
+ var ore=parseFloat($('#fa-h').value),op=$('#fa-o').value.trim(),dt=$('#fa-d').value,zv=$('#fa-z').value,camp=zv==='campagna',gen=S.aree.find(function(x){return x.settore==='Vigneto'&&!(x.ettari>0)}),az=camp&&gen?gen.id:parseInt(zv,10);
+ if(op==='Altro'){var alt=$('#fa-alt')?$('#fa-alt').value.trim():'';if(!alt)return toast('Specifica quale attività.');op='Altro: '+alt}
  if(!dt||!op||!(ore>0)||!az)return toast('Compila data, zona, attività e ore.');
  if(ore>24)return toast('Le ore non possono superare 24.');
  var row={data:dt,operazione:op,area_id:az,ore:ore,note:$('#fa-n').value.trim()||null};
+ if(op.toLowerCase().indexOf('altro')!==0&&PRODRE0.test(op.toLowerCase())&&$('#fa-pr')){var pr=$('#fa-pr').value.trim();if(!pr)return toast('Indica il prodotto utilizzato.');row.prodotto=pr;row.dose=$('#fa-ds').value.trim()||null}
+ if(camp||(e&&e.tutta_campagna))row.tutta_campagna=camp;
  var kk=avzKey(op),tt=vigTot(az);if(kk&&tt.n&&$('#fa-fa')){var fa=parseInt($('#fa-fa').value,10);if(fa){if(fa<1||fa>tt.n)return toast('Il filare deve essere tra 1 e '+tt.n+'.');var fd=parseInt($('#fa-fd').value,10)||null;if(fd&&(fd<1||fd>tt.n))return toast('Il filare di partenza deve essere tra 1 e '+tt.n+'.');if(!fd)fd=(e&&e.avz_lavoro===kk&&e.area_id===az&&e.filare_da!=null)?e.filare_da:resolveDa(AVZCOV,tt.n,fa);row.filare_a=fa;row.filare_da=fd;row.avz_lavoro=kk}else if(e){row.filare_a=null;row.filare_da=null;row.avz_lavoro=null}}
  if(isM()){var u=$('#fa-u').value;if(u)row.user_id=u;else if(!e)return toast('Scegli il dipendente.')}else if(!e)row.user_id=S.user.id;
  var b=$('#fa-ok');b.disabled=true;
@@ -239,7 +254,7 @@ function vOggi(){var t=today(),h=new Date().getHours();var sal=h<13?'Buongiorno'
  '<h3>Registrato oggi</h3><div class="card">'+(mine.length?mine.map(attRow).join(''):'<span class="mut">Ancora niente. Tocca “Registra attività” per aggiungere il lavoro di oggi.</span>')+'</div>'+
  (soon.length?'<h3>Nei prossimi giorni</h3><div class="card">'+soon.map(oc).join('')+'</div>':'')+
  '<button class="btn fab" data-act="newatt">＋ Registra attività</button>'}
-function attRow(a){return'<div class="it"><div class="h">'+fore(a.ore)+'h</div><div class="sp"><div class="t">'+esc(a.operazione)+'</div><div class="mut">'+esc(areaLabel(a.area_id))+(a.filare_a!=null?' · filari '+(a.filare_da!=null&&a.filare_da!==a.filare_a?a.filare_da+'→':'')+a.filare_a:'')+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}
+function attRow(a){return'<div class="it"><div class="h">'+fore(a.ore)+'h</div><div class="sp"><div class="t">'+esc(a.operazione)+'</div><div class="mut">'+esc(zoneLbl(a))+(a.filare_a!=null?' · filari '+(a.filare_da!=null&&a.filare_da!==a.filare_a?a.filare_da+'→':'')+a.filare_a:'')+(a.prodotto?' · '+esc(a.prodotto)+(a.dose?' ('+esc(a.dose)+')':''):'')+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}
 function vOre(){var y=S.ore.y,m=S.ore.m,mine=S.att;
  var yrs={};yrs[new Date().getFullYear()]=1;mine.forEach(function(a){yrs[a.data.slice(0,4)]=1});var ylist=Object.keys(yrs).sort().reverse();
  var per=[];for(var i=0;i<12;i++)per.push({h:0,g:{}});mine.forEach(function(a){if(+a.data.slice(0,4)===y){var k=+a.data.slice(5,7)-1;per[k].h+=Number(a.ore);per[k].g[a.data]=1}});
@@ -249,7 +264,7 @@ function vOre(){var y=S.ore.y,m=S.ore.m,mine=S.att;
  return'<div class="row"><h2 class="sp">Le mie ore</h2><select id="ore-y" style="width:auto">'+ylist.map(function(a){return'<option'+(+a===y?' selected':'')+'>'+a+'</option>'}).join('')+'</select></div>'+
  '<div class="grid2 m"><div class="kpi"><b>'+fore(per[m].h)+' h</b><span>'+MESI[m]+' '+y+' · '+Object.keys(per[m].g).length+' giorni</span></div><div class="kpi"><b>'+fore(ytot)+' h</b><span>totale '+y+'</span></div></div>'+
  '<h3 style="margin-top:18px">Mese per mese</h3><div class="card">'+bars+'</div>'+
- '<h3>'+MESI[m]+' '+y+'</h3><div class="card">'+(rows.length?rows.map(function(a){return'<div class="it"><div class="h" style="min-width:80px;font-size:15px">'+fdate(a.data)+'</div><div class="sp"><div class="t">'+esc(a.operazione)+' <span class="mut">· '+fore(a.ore)+' h</span></div><div class="mut">'+esc(areaLabel(a.area_id))+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}).join(''):'<span class="mut">Nessuna attività in questo mese.</span>')+'</div>'+
+ '<h3>'+MESI[m]+' '+y+'</h3><div class="card">'+(rows.length?rows.map(function(a){return'<div class="it"><div class="h" style="min-width:80px;font-size:15px">'+fdate(a.data)+'</div><div class="sp"><div class="t">'+esc(a.operazione)+' <span class="mut">· '+fore(a.ore)+' h</span></div><div class="mut">'+esc(zoneLbl(a))+(a.note?' · '+esc(a.note):'')+'</div></div>'+(canEdit(a)?'<button class="btn g sm" data-edit="'+a.id+'">Modifica</button>':'')+'</div>'}).join(''):'<span class="mut">Nessuna attività in questo mese.</span>')+'</div>'+
  '<button class="btn fab" data-act="newatt">＋ Registra attività</button>'}
 
 /* ============ MASTER: STATISTICHE ============ */
@@ -279,7 +294,7 @@ function matrix(rows){var ops=group(rows,function(a){return a.operatore||'—'})
 function vStat(){var f=S.f;var yrs={};S.att.forEach(function(a){yrs[a.data.slice(0,4)]=1});yrs[new Date().getFullYear()]=1;var ylist=Object.keys(yrs).sort().reverse();
  var opers=Object.keys(S.att.reduce(function(m,a){m[a.operatore]=1;return m},{})).sort();
  var rows=fRows(),tot=rows.reduce(function(s,a){return s+Number(a.ore)},0),days={};rows.forEach(function(a){days[a.data]=1});
- var mc=monthChart(f.mese==='0'?rows:rows,f.anno),bs=group(rows,settoreDi),bo=group(rows,function(a){return a.operatore||'—'}),bz=group(rows,function(a){return areaLabel(a.area_id)}),bop=group(rows,function(a){return a.operazione.trim().toLowerCase().replace(/^./,function(c){return c.toUpperCase()})});
+ var mc=monthChart(f.mese==='0'?rows:rows,f.anno),bs=group(rows,settoreDi),bo=group(rows,function(a){return a.operatore||'—'}),bz=spreadZ(rows),bop=group(rows,function(a){return a.operazione.trim().toLowerCase().replace(/^./,function(c){return c.toUpperCase()})});
  var sel=function(id,opts,val){return'<select id="'+id+'" style="width:auto">'+opts.map(function(o){return'<option value="'+esc(o[0])+'"'+(String(val)===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>'}).join('')+'</select>'};
  return'<h2>Statistiche</h2><div class="row" style="margin:10px 0">'+sel('sf-a',[['','Tutti gli anni']].concat(ylist.map(function(y){return[y,y]})),f.anno)+sel('sf-m',[['0','Tutti i mesi']].concat(MESI.map(function(m,i){return[i+1,m]})),f.mese)+sel('sf-s',[['','Tutti i settori']].concat(SETTORI.map(function(s){return[s,s]})),f.settore)+sel('sf-o',[['','Tutti i dipendenti']].concat(opers.map(function(o){return[o,o||'—']})),f.oper)+'</div>'+
  '<div class="grid4"><div class="kpi"><b>'+fore(tot)+'</b><span>ore totali</span></div><div class="kpi"><b>'+rows.length+'</b><span>attività registrate</span></div><div class="kpi"><b>'+Object.keys(days).length+'</b><span>giorni di lavoro</span></div><div class="kpi"><b>'+fore(Object.keys(days).length?tot/Object.keys(days).length:0)+'</b><span>ore medie al giorno</span></div></div>'+
@@ -325,9 +340,9 @@ function laRows(){var l=S.la;return S.att.filter(function(a){return(!l.mese||a.d
 function vAtt(){var l=S.la,rows=laRows(),tot=rows.reduce(function(s,a){return s+Number(a.ore)},0),opers=Object.keys(S.att.reduce(function(m,a){m[a.operatore]=1;return m},{})).sort();
  return'<div class="row"><h2 class="sp">Attività</h2><button class="btn g" data-act="csv">Esporta CSV</button><button class="btn" data-act="newatt">＋ Aggiungi</button></div>'+
  '<div class="row" style="margin:10px 0"><input type="month" id="la-m" value="'+l.mese+'" style="width:auto"><select id="la-o" style="width:auto"><option value="">Tutti i dipendenti</option>'+opers.map(function(o){return'<option'+(o===l.oper?' selected':'')+'>'+esc(o)+'</option>'}).join('')+'</select><select id="la-s" style="width:auto"><option value="">Tutti i settori</option>'+SETTORI.map(function(s){return'<option'+(s===l.settore?' selected':'')+'>'+s+'</option>'}).join('')+'</select><button class="btn g sm" data-act="laall">Tutti i mesi</button></div>'+
- '<p class="mut">'+rows.length+' attività · <b>'+fore(tot)+' ore</b></p><div class="card scroll"><table><tr><th>Data</th><th>Dipendente</th><th>Zona</th><th>Attività</th><th class="n">Ore</th><th></th></tr>'+rows.slice(0,400).map(function(a){return'<tr><td>'+fdate(a.data)+'</td><td>'+esc(a.operatore)+'</td><td>'+esc(areaLabel(a.area_id))+'</td><td>'+esc(a.operazione)+(a.note?'<div class="mut">'+esc(a.note)+'</div>':'')+'</td><td class="n">'+fore(a.ore)+'</td><td><button class="btn g sm" data-edit="'+a.id+'">Modifica</button></td></tr>'}).join('')+'</table>'+(rows.length>400?'<p class="mut">Mostrate le prime 400: restringi i filtri.</p>':'')+'</div>'}
+ '<p class="mut">'+rows.length+' attività · <b>'+fore(tot)+' ore</b></p><div class="card scroll"><table><tr><th>Data</th><th>Dipendente</th><th>Zona</th><th>Attività</th><th class="n">Ore</th><th></th></tr>'+rows.slice(0,400).map(function(a){return'<tr><td>'+fdate(a.data)+'</td><td>'+esc(a.operatore)+'</td><td>'+esc(zoneLbl(a))+'</td><td>'+esc(a.operazione)+(a.prodotto?'<div class="mut">Prodotto: '+esc(a.prodotto)+(a.dose?' · '+esc(a.dose):'')+'</div>':'')+(a.note?'<div class="mut">'+esc(a.note)+'</div>':'')+'</td><td class="n">'+fore(a.ore)+'</td><td><button class="btn g sm" data-edit="'+a.id+'">Modifica</button></td></tr>'}).join('')+'</table>'+(rows.length>400?'<p class="mut">Mostrate le prime 400: restringi i filtri.</p>':'')+'</div>'}
 function csv(){var rows=laRows(),q=function(s){return'"'+String(s==null?'':s).replace(/"/g,'""')+'"'};
- var out=['Data;Dipendente;Settore;Zona;Attività;Ore;Note'].concat(rows.map(function(a){return[a.data,q(a.operatore),q(settoreDi(a)),q(zonaDi(a)),q(a.operazione),String(a.ore).replace('.',','),q(a.note)].join(';')})).join('\r\n');
+ var out=['Data;Dipendente;Settore;Zona;Attività;Prodotto;Dose;Ore;Note'].concat(rows.map(function(a){return[a.data,q(a.operatore),q(settoreDi(a)),q(zonaDi(a)),q(a.operazione),q(a.prodotto),q(a.dose),String(a.ore).replace('.',','),q(a.note)].join(';')})).join('\r\n');
  var u=URL.createObjectURL(new Blob(['﻿'+out],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=u;a.download='attivita_'+(S.la.mese||'tutte')+'.csv';document.body.appendChild(a);a.click();a.remove();toast('File CSV creato')}
 
 /* ============ MASTER: SQUADRA ============ */
