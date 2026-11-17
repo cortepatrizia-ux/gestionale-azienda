@@ -99,7 +99,7 @@ function addMonths(s,n){var d=pd(s),day=d.getDate();d.setDate(1);d.setMonth(d.ge
 function fdate(s){var d=pd(s);return GS[(d.getDay()+6)%7]+' '+d.getDate()+' '+MS[d.getMonth()]}
 function fore(n){n=Math.round(n*100)/100;return String(n).replace('.',',')}
 function toast(m){var t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){t.style.display='none'},3200)}
-function ico(n){var p={cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.500 20c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6"/><circle cx="17.500" cy="9" r="2.500"/><path d="M17 14c3 0 4.500 2 4.500 5"/>',home:'<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'};return'<svg viewBox="0 0 24 24">'+p[n]+'</svg>'}
+function ico(n){var p={cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.500 20c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6"/><circle cx="17.500" cy="9" r="2.500"/><path d="M17 14c3 0 4.500 2 4.500 5"/>',home:'<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',leaf:'<path d="M5 19c0-9 5-14 15-14 0 10-5 15-14 15M5 19l8-8"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'};return'<svg viewBox="0 0 24 24">'+p[n]+'</svg>'}
 async function fetchAll(mk){var out=[],from=0;for(;;){var r=await mk().range(from,from+999);if(r.error)throw r.error;out=out.concat(r.data);if(r.data.length<1000)break;from+=1000}return out}
 function fail(e){console.error(e);var m=(e&&e.message)||String(e);if(e&&(e.code==='42P01'||/does not exist|schema cache/i.test(m)))m='Il database non è ancora pronto: esegui prima lo script SQL.';
  if(e&&/az_imposta_password/.test(m))m='Manca la funzione per cambiare le password: esegui lo script 03_password.sql in Supabase.';toast('Errore: '+m)}
@@ -163,21 +163,21 @@ async function start(){
 async function loadAll(){
  var a=await sb.from('az_aree').select('*').eq('attiva',true).order('ordine');if(a.error)throw a.error;S.aree=a.data;
  if(isM()){var pr=await sb.from('az_profili').select('*').order('nome');if(pr.error)throw pr.error;S.profili=pr.data}
- await loadAtt();await loadPian()}
+ await loadAtt();await loadPian();if(isM())await loadVig()}
 async function loadAtt(){S.att=await fetchAll(function(){var q=sb.from('az_attivita').select('*').order('data',{ascending:false}).order('id',{ascending:false});return isM()?q:q.eq('user_id',S.user.id)})}
 async function loadPian(){
  var p=await sb.from('az_pianificazioni').select('*').order('data');if(p.error)throw p.error;S.pian=p.data;
  var f=await sb.from('az_pian_fatti').select('*').limit(5000);if(f.error)throw f.error;S.fatti=f.data}
 
 /* ============ SHELL ============ */
-function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore']]}
+function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['vig','leaf','Vigneto'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore']]}
 function render(){
  var nav=navItems().map(function(n){return'<button class="n'+(S.view===n[0]?' on':'')+'" data-go="'+n[0]+'">'+ico(n[1])+'<span>'+n[2]+'</span></button>'}).join('');
- var soon=isM()?'<div class="soon"><b>In arrivo</b>Campagna · Trattamenti · Scadenze · Costi · Rimessaggio</div>':'';
+ var soon=isM()?'<div class="soon"><b>In arrivo</b>Trattamenti · Scadenze · Costi · Rimessaggio</div>':'';
  $('#app').innerHTML='<div class="top"><b>Azienda Agricola</b><button class="btn g sm" data-act="logout">Esci</button></div><div class="shell"><nav class="nav"><div class="brand">Azienda Agricola<small>'+(isM()?'Pagina master':'Area dipendente')+'</small></div>'+nav+soon+'<div class="who">'+esc(S.prof.nome)+'<br><a href="#" data-act="logout" style="color:var(--acc)">Esci</a></div></nav><main id="main"></main></div>';
  view()}
 function view(){
- var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam}[S.view];$('#main').innerHTML=v();
+ var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam,vig:vVig}[S.view];$('#main').innerHTML=v();
  document.querySelectorAll('.nav button.n').forEach(function(b){b.classList.toggle('on',b.dataset.go===S.view)})}
 
 /* ============ FORM ATTIVITA ============ */
@@ -338,11 +338,60 @@ async function saveProf(id){var tr=document.querySelector('tr[data-p="'+id+'"]')
  if(!row.nome)return toast('Il nome è obbligatorio.');if(id===S.user.id&&(row.ruolo!=='master'||!row.attivo))return toast('Non puoi togliere a te stesso il ruolo master.');
  var r=await sb.from('az_profili').update(row).eq('id',id);if(r.error)return fail(r.error);var p=await sb.from('az_profili').select('*').order('nome');S.profili=p.data;view();toast('Salvato ✓')}
 
+/* ============ VIGNETO (fase 2) ============ */
+var FASI=['Pianto (germogliamento)','Punta verde','Foglie distese','Grappoli visibili','Fioritura','Allegagione','Chiusura grappolo','Invaiatura','Vendemmia','Caduta foglie'];
+var LAVORI=['Potatura','Legatura','Trinciatura','Spollonatura','Cimatura','Vendemmia'];
+S.vig={anno:new Date().getFullYear(),tab:'pan',filari:[],fasi:[],sost:[],avanz:[],err:null};
+async function loadVig(){try{
+ S.vig.filari=await fetchAll(function(){return sb.from('az_filari').select('*').order('area_id').order('numero')});
+ var q=async function(t){var r=await sb.from(t).select('*').limit(5000);if(r.error)throw r.error;return r.data};
+ S.vig.fasi=await q('az_fasi_fen');S.vig.sost=await q('az_sostituzioni');S.vig.avanz=await q('az_avanzamento');S.vig.err=null}
+ catch(e){S.vig.err=e}}
+function vigAree(){var ids={};S.vig.filari.forEach(function(f){ids[f.area_id]=1});return S.aree.filter(function(a){return ids[a.id]})}
+function vigTot(aid){var fs=S.vig.filari.filter(function(f){return f.area_id===aid});return{n:fs.length,v:fs.reduce(function(s,f){return s+f.n_vigne},0),fs:fs}}
+function vigPct(aid,lavoro){var t=vigTot(aid),a=S.vig.avanz.find(function(x){return x.anno===S.vig.anno&&x.area_id===aid&&x.lavoro===lavoro});if(!a||!t.v)return 0;var done=t.fs.filter(function(f){return f.numero<=a.filari_fatti}).reduce(function(s,f){return s+f.n_vigne},0);return done/t.v}
+function vVig(){var V=S.vig,y=V.anno;
+ if(V.err){var m=V.err.message||'';return'<h2>Vigneto</h2><div class="card"><p>'+(/does not exist|schema cache|42P01/i.test(m+(V.err.code||''))?'Il database non ha ancora le tabelle del vigneto: esegui lo script <b>04_vigneto.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.':'Errore: '+esc(m))+'</p></div>'}
+ var yrs=[];for(var i=new Date().getFullYear()+1;i>=2022;i--)yrs.push(i);
+ var head='<div class="row"><h2 class="sp">Vigneto e campagna</h2><select id="vg-y" style="width:auto">'+yrs.map(function(v){return'<option'+(v===y?' selected':'')+'>'+v+'</option>'}).join('')+'</select></div>'+
+  '<div class="chips">'+[['pan','Panoramica'],['fasi','Fasi fenologiche'],['sost','Viti da sostituire'],['fil','Filari']].map(function(t){return'<button class="chip'+(V.tab===t[0]?' on':'')+'" data-vtab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</div>';
+ return head+({pan:vigPan,fasi:vigFasi,sost:vigSost,fil:vigFil}[V.tab])()}
+function vigPan(){var V=S.vig,y=V.anno,ar=vigAree(),tv=0,tn=0;ar.forEach(function(a){var t=vigTot(a.id);tv+=t.v;tn+=t.n});
+ var sy=V.sost.filter(function(s){return s.anno===y}),sd=sy.filter(function(s){return s.stato==='da_fare'}).reduce(function(s,x){return s+x.n_vigne},0),sf=sy.filter(function(s){return s.stato==='fatto'}).reduce(function(s,x){return s+x.n_vigne},0);
+ var out='<div class="grid4"><div class="kpi"><b>'+ar.length+'</b><span>vigneti</span></div><div class="kpi"><b>'+tn+'</b><span>filari</span></div><div class="kpi"><b>'+tv.toLocaleString('it-IT')+'</b><span>viti</span></div><div class="kpi"><b>'+sd+'</b><span>viti da sostituire nel '+y+(sf?' ('+sf+' fatte)':'')+'</span></div></div>';
+ ar.forEach(function(a){var t=vigTot(a.id),f=V.fasi.filter(function(x){return x.anno===y&&x.area_id===a.id}).sort(function(p,q){return p.data<q.data?1:-1})[0];
+  var bars=LAVORI.map(function(l){var p=vigPct(a.id,l);return'<div class="hb" data-tip="'+esc(a.nome+' · '+l)+'<br><b>'+Math.round(p*100)+'%</b>"><span class="lb">'+l+'</span><span class="tr"><span class="fl" style="display:block;width:'+p*100+'%"></span></span><span class="v">'+Math.round(p*100)+'%</span></div>'}).join('');
+  out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+(a.ettari?fore(a.ettari)+' ha · ':'')+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span><button class="btn g sm" data-vavz="'+a.id+'">Aggiorna avanzamento</button></div>'+
+   '<p class="mut" style="margin:4px 0 8px">'+(f?'Ultima fase: <b>'+esc(f.fase)+'</b> ('+fdate(f.data)+')':'Nessuna fase registrata nel '+y)+'</p>'+bars+'</div>'});
+ return out+'<p class="mut">La percentuale conta le viti dei filari già completati, dal filare 1 fino al filare che indichi in “Aggiorna avanzamento”.</p>'}
+function vigFasi(){var V=S.vig,y=V.anno,ar=vigAree();
+ return'<div class="card scroll"><table><tr><th>Fase</th>'+ar.map(function(a){return'<th>'+esc(a.nome)+'</th>'}).join('')+'</tr>'+FASI.map(function(f,i){return'<tr><td>'+esc(f)+'</td>'+ar.map(function(a){var x=V.fasi.find(function(z){return z.anno===y&&z.area_id===a.id&&z.fase===f});return'<td><input type="date" data-fase="'+i+'|'+a.id+'" value="'+(x?x.data:'')+'" style="min-width:140px"></td>'}).join('')+'</tr>'}).join('')+'</table></div><p class="mut">Inserisci la data in cui la fase è stata osservata in ogni vigneto: si salva da sola. Svuota la data per cancellarla. Il confronto tra anni ti aiuta a prevedere trattamenti e vendemmia.</p>'+
+ (function(){var rows=[];ar.forEach(function(a){FASI.forEach(function(f){var cur=V.fasi.find(function(z){return z.anno===y&&z.area_id===a.id&&z.fase===f});var prev=V.fasi.filter(function(z){return z.anno<y&&z.area_id===a.id&&z.fase===f}).sort(function(p,q){return q.anno-p.anno})[0];if(cur&&prev){var d=Math.round((pd(cur.data)-pd(prev.data.replace(/^\d{4}/,String(y))))/864e5);rows.push('<tr><td>'+esc(a.nome)+'</td><td>'+esc(f)+'</td><td class="n">'+(d>0?'+':'')+d+' giorni</td><td>rispetto al '+prev.anno+'</td></tr>')}})});
+ return rows.length?'<div class="card"><h3>Confronto con l’anno precedente</h3><div class="scroll"><table>'+rows.join('')+'</table></div></div>':''})()}
+function vigSost(){var V=S.vig,y=V.anno,rows=V.sost.filter(function(s){return s.anno===y}).sort(function(a,b){return a.stato<b.stato?-1:a.stato>b.stato?1:(a.filare||0)-(b.filare||0)});
+ var byA=group2(rows);
+ return'<div class="row"><p class="mut sp" style="margin:0">Viti morte da sostituire nel '+y+'.</p><button class="btn" data-act="newsost">+ Aggiungi</button></div>'+
+ (byA?'<div class="card"><h3>Riepilogo</h3><div class="scroll"><table><tr><th>Vigneto</th><th class="n">Da fare</th><th class="n">Fatte</th></tr>'+byA+'</table></div></div>':'')+
+ '<div class="card scroll"><table><tr><th>Vigneto</th><th class="n">Filare</th><th class="n">Viti</th><th>Stato</th><th>Note</th><th></th></tr>'+(rows.length?rows.map(function(s){return'<tr><td>'+esc(areaLabel(s.area_id).replace('Vigneto · ',''))+'</td><td class="n">'+(s.filare||'—')+'</td><td class="n">'+s.n_vigne+'</td><td><span class="tag'+(s.stato==='fatto'?'':' w')+'">'+(s.stato==='fatto'?'Fatto':'Da fare')+'</span></td><td>'+esc(s.note||'')+'</td><td style="white-space:nowrap"><button class="btn g sm" data-sstato="'+s.id+'">'+(s.stato==='fatto'?'Riapri':'Segna fatto')+'</button> <button class="btn d sm" data-sdel="'+s.id+'">×</button></td></tr>'}).join(''):'<tr><td colspan="6" class="mut">Nessuna voce per il '+y+'.</td></tr>')+'</table></div>'}
+function group2(rows){var m={};rows.forEach(function(s){var k=s.area_id;m[k]=m[k]||{d:0,f:0};m[k][s.stato==='fatto'?'f':'d']+=s.n_vigne});return Object.keys(m).map(function(k){return'<tr><td>'+esc(areaLabel(+k).replace('Vigneto · ',''))+'</td><td class="n">'+m[k].d+'</td><td class="n">'+m[k].f+'</td></tr>'}).join('')}
+function vigFil(){var out='';vigAree().forEach(function(a){var t=vigTot(a.id);out+='<div class="card"><div class="row"><h3 class="sp">'+esc(a.nome)+'</h3><span class="mut">'+t.n+' filari · '+t.v.toLocaleString('it-IT')+' viti</span></div><div class="scroll" style="max-height:260px;overflow-y:auto"><table><tr><th class="n">Filare</th><th class="n">Viti</th><th>Varietà</th></tr>'+t.fs.map(function(f){return'<tr><td class="n">'+f.numero+'</td><td class="n">'+f.n_vigne+'</td><td>'+esc(f.varieta||'')+'</td></tr>'}).join('')+'</table></div></div>'});
+ return out+'<p class="mut">Dati dalla tua piantina Excel. Bardolino: Rondinella filari 1–12, Corvina 13–67, Merlot/Corvina 68–105 (da verificare).</p>'}
+function openAvz(aid){var a=area(aid),t=vigTot(aid),d=$('#dlg');d.onclick=null;
+ d.innerHTML='<h3>'+esc(a.nome)+' · avanzamento '+S.vig.anno+'</h3><p class="mut">Indica fino a quale filare (1–'+t.n+') il lavoro è completato. 0 = non iniziato.</p>'+LAVORI.map(function(l,i){var x=S.vig.avanz.find(function(z){return z.anno===S.vig.anno&&z.area_id===aid&&z.lavoro===l});return'<label>'+l+'</label><input type="number" min="0" max="'+t.n+'" id="av'+i+'" value="'+(x?x.filari_fatti:0)+'">'}).join('')+'<div class="row" style="margin-top:16px"><button class="btn" id="av-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>';
+ $('#av-ok').onclick=async function(){var rows=LAVORI.map(function(l,i){return{anno:S.vig.anno,area_id:aid,lavoro:l,filari_fatti:Math.max(0,Math.min(t.n,+$('#av'+i).value||0)),aggiornato:new Date().toISOString()}});var r=await sb.from('az_avanzamento').upsert(rows,{onConflict:'anno,area_id,lavoro'});if(r.error)return fail(r.error);await loadVig();d.close();view();toast('Salvato ✓')};d.showModal()}
+function openSost(){var d=$('#dlg');d.onclick=null;var ar=vigAree();
+ d.innerHTML='<h3>Viti da sostituire · '+S.vig.anno+'</h3><label>Vigneto</label><select id="ss-a">'+ar.map(function(a){return'<option value="'+a.id+'">'+esc(a.nome)+'</option>'}).join('')+'</select><div class="grid2"><div><label>Filare (facoltativo)</label><input type="number" id="ss-f" min="1"></div><div><label>Numero di viti</label><input type="number" id="ss-n" min="1" value="1"></div></div><label>Note</label><input id="ss-t" placeholder="es. zona bassa, vite secca"><div class="row" style="margin-top:16px"><button class="btn" id="ss-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>';
+ $('#ss-ok').onclick=async function(){var n=+$('#ss-n').value;if(!(n>0))return toast('Indica quante viti.');var r=await sb.from('az_sostituzioni').insert({anno:S.vig.anno,area_id:+$('#ss-a').value,filare:+$('#ss-f').value||null,n_vigne:n,note:$('#ss-t').value.trim()||null});if(r.error)return fail(r.error);await loadVig();d.close();view();toast('Aggiunto ✓')};d.showModal()}
+
 /* ============ EVENTI ============ */
 document.addEventListener('click',async function(ev){var t=ev.target,b;
+ if(b=t.closest('[data-vtab]')){S.vig.tab=b.dataset.vtab;view();return}
+ if(b=t.closest('[data-vavz]')){openAvz(+b.dataset.vavz);return}
+ if(b=t.closest('[data-sstato]')){var sx=S.vig.sost.find(function(z){return z.id===+b.dataset.sstato}),fa=sx.stato==='fatto';var rr=await sb.from('az_sostituzioni').update({stato:fa?'da_fare':'fatto',data_fatto:fa?null:today()}).eq('id',sx.id);if(rr.error)return fail(rr.error);await loadVig();view();return}
+ if(b=t.closest('[data-sdel]')){if(!confirm('Eliminare questa voce?'))return;var r2=await sb.from('az_sostituzioni').delete().eq('id',+b.dataset.sdel);if(r2.error)return fail(r2.error);await loadVig();view();return}
  if(b=t.closest('[data-go]')){S.view=b.dataset.go;view();window.scrollTo(0,0);return}
  if(b=t.closest('[data-act]')){var a=b.dataset.act;ev.preventDefault();
-  if(a==='logout')logout();else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
+  if(a==='logout')logout();else if(a==='newsost')openSost();else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
   else if(a==='laall'){S.la.mese='';view()}else if(a==='tgl')b.closest('.cc').classList.toggle('t');return}
  if(b=t.closest('[data-edit]')){var e=S.att.find(function(x){return x.id===+b.dataset.edit});if(e)openAtt({edit:e});return}
  if(b=t.closest('[data-fatto]')){var p=b.dataset.fatto.split('|'),pp=S.pian.find(function(x){return x.id===+p[0]});openAtt({pian:pp.id,occ:p[1],op:pp.titolo,area_id:pp.area_id,settore:pp.area_id&&area(pp.area_id)?area(pp.area_id).settore:null});return}
@@ -355,6 +404,8 @@ document.addEventListener('click',async function(ev){var t=ev.target,b;
  if(b=t.closest('[data-pwd]')){openPwd(b.dataset.pwd);return}
  var tip=t.closest('[data-tip]');if(tip&&matchMedia('(hover:none)').matches)showTip(tip,ev)});
 document.addEventListener('change',function(ev){var id=ev.target.id;
+ if(id==='vg-y'){S.vig.anno=+ev.target.value;view();return}
+ if(ev.target.dataset&&ev.target.dataset.fase){var pr=ev.target.dataset.fase.split('|'),fase=FASI[+pr[0]],aid=+pr[1],val=ev.target.value,y=S.vig.anno;(async function(){var r=val?await sb.from('az_fasi_fen').upsert({anno:y,area_id:aid,fase:fase,data:val},{onConflict:'anno,area_id,fase'}):await sb.from('az_fasi_fen').delete().eq('anno',y).eq('area_id',aid).eq('fase',fase);if(r.error)return fail(r.error);await loadVig();toast('Salvato ✓')})();return}
  if(id==='ore-y'){S.ore.y=+ev.target.value;view()}
  else if(id==='sf-a'||id==='sf-m'||id==='sf-s'||id==='sf-o'){S.f.anno=$('#sf-a').value;S.f.mese=$('#sf-m').value;S.f.settore=$('#sf-s').value;S.f.oper=$('#sf-o').value;view()}
  else if(id==='la-m'||id==='la-o'||id==='la-s'){S.la.mese=$('#la-m').value;S.la.oper=$('#la-o').value;S.la.settore=$('#la-s').value;view()}});
