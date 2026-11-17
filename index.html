@@ -84,7 +84,8 @@ var MESI=['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agos
 var MS=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 var GS=['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 var mem={};var store={getItem:function(k){try{return localStorage.getItem(k)}catch(e){return mem[k]==null?null:mem[k]}},setItem:function(k,v){try{localStorage.setItem(k,v)}catch(e){mem[k]=v}},removeItem:function(k){try{localStorage.removeItem(k)}catch(e){delete mem[k]}}};
-var sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:store}});
+var REC=/type=recovery/.test(location.hash||''),RECERR=/error_description|error_code/.test(location.hash||'');
+var sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:store}});
 
 /* ============ UTIL ============ */
 var $=function(s,r){return(r||document).querySelector(s)};
@@ -100,7 +101,8 @@ function fore(n){n=Math.round(n*100)/100;return String(n).replace('.',',')}
 function toast(m){var t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(function(){t.style.display='none'},3200)}
 function ico(n){var p={cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.500 20c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6"/><circle cx="17.500" cy="9" r="2.500"/><path d="M17 14c3 0 4.500 2 4.500 5"/>',home:'<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'};return'<svg viewBox="0 0 24 24">'+p[n]+'</svg>'}
 async function fetchAll(mk){var out=[],from=0;for(;;){var r=await mk().range(from,from+999);if(r.error)throw r.error;out=out.concat(r.data);if(r.data.length<1000)break;from+=1000}return out}
-function fail(e){console.error(e);var m=(e&&e.message)||String(e);if(e&&(e.code==='42P01'||/does not exist|schema cache/i.test(m)))m='Il database non è ancora pronto: esegui prima lo script SQL.';toast('Errore: '+m)}
+function fail(e){console.error(e);var m=(e&&e.message)||String(e);if(e&&(e.code==='42P01'||/does not exist|schema cache/i.test(m)))m='Il database non è ancora pronto: esegui prima lo script SQL.';
+ if(e&&/az_imposta_password/.test(m))m='Manca la funzione per cambiare le password: esegui lo script 03_password.sql in Supabase.';toast('Errore: '+m)}
 
 /* ============ STATE ============ */
 var S={user:null,prof:null,aree:[],att:[],pian:[],fatti:[],profili:[],view:'',
@@ -117,18 +119,38 @@ function nomeUtente(id){var p=S.profili.find(function(x){return x.id===id});retu
 
 /* ============ LOGIN / BOOT ============ */
 function renderLogin(msg){
- $('#app').innerHTML='<div class="login"><h1 style="font-size:28px;margin-bottom:4px">Azienda Agricola</h1><p class="mut" style="margin-top:0">Gestione attività, ore e calendario</p><form class="card" id="lf"><label>Email</label><input id="le" type="email" autocomplete="username" required><label>Password</label><input id="lp" type="password" autocomplete="current-password" required><button class="btn" style="width:100%;margin-top:16px" id="lb">Entra</button><div class="err" id="lerr">'+esc(msg||'')+'</div></form></div>';
+ $('#app').innerHTML='<div class="login"><h1 style="font-size:28px;margin-bottom:4px">Azienda Agricola</h1><p class="mut" style="margin-top:0">Gestione attività, ore e calendario</p><form class="card" id="lf"><label>Email</label><input id="le" type="email" autocomplete="username" required><label>Password</label><input id="lp" type="password" autocomplete="current-password" required><button class="btn" style="width:100%;margin-top:16px" id="lb">Entra</button><div class="err" id="lerr">'+esc(msg||'')+'</div><p style="text-align:center;margin:14px 0 0"><a href="#" id="lfg" style="color:var(--acc)">Password dimenticata?</a></p></form></div>';
+ $('#lfg').onclick=function(e){e.preventDefault();renderForgot()};
  $('#lf').onsubmit=async function(ev){ev.preventDefault();var b=$('#lb');b.disabled=true;$('#lerr').textContent='';
   var r=await sb.auth.signInWithPassword({email:$('#le').value.trim(),password:$('#lp').value});
   if(r.error){$('#lerr').textContent=r.error.message==='Invalid login credentials'?'Email o password non corrette.':r.error.message;b.disabled=false;return}
   S.user=r.data.user;await start()}
 }
+function renderForgot(){
+ $('#app').innerHTML=`<div class="login"><h1 style="font-size:26px;margin-bottom:4px">Recupera la password</h1><p class="mut" style="margin-top:0">Scrivi la tua email: ti mandiamo un link per sceglierne una nuova.</p><form class="card" id="ff"><label>Email</label><input id="fe" type="email" autocomplete="username" required><button class="btn" style="width:100%;margin-top:16px" id="fb">Invia il link</button><div class="err" id="ferr"></div><p style="text-align:center;margin:14px 0 0"><a href="#" id="fback" style="color:var(--acc)">Torna all'accesso</a></p></form></div>`;
+ $('#fback').onclick=function(e){e.preventDefault();renderLogin()};
+ $('#ff').onsubmit=async function(ev){ev.preventDefault();var b=$('#fb');b.disabled=true;$('#ferr').textContent='';
+  var r=await sb.auth.resetPasswordForEmail($('#fe').value.trim(),{redirectTo:location.origin+location.pathname});b.disabled=false;
+  if(r.error){var m=r.error.message||'';$('#ferr').textContent=/rate limit/i.test(m)?'Troppe richieste: riprova tra un po.':/not authorized|not_authorized/i.test(m)?'L\'invio di email non è attivo per questo indirizzo. Chiedi al titolare di reimpostare la password.':'Non sono riuscito a inviare l\'email: '+m;return}
+  $('#ff').innerHTML='<p>Se l\'indirizzo è registrato, riceverai un\'email con il link. Controlla anche la posta indesiderata.</p><button class="btn g" style="width:100%" type="button" id="fback2">Torna all\'accesso</button>';
+  $('#fback2').onclick=function(){renderLogin()}}}
+function renderNewPass(msg){
+ $('#app').innerHTML=`<div class="login"><h1 style="font-size:26px;margin-bottom:4px">Scegli una nuova password</h1><form class="card" id="nf"><label>Nuova password (almeno 8 caratteri)</label><input id="np1" type="password" autocomplete="new-password" required><label>Ripetila</label><input id="np2" type="password" autocomplete="new-password" required><button class="btn" style="width:100%;margin-top:16px" id="nb">Salva e accedi</button><div class="err" id="nerr">${esc(msg||'')}</div></form></div>`;
+ $('#nf').onsubmit=async function(ev){ev.preventDefault();var a=$('#np1').value;
+  if(a.length<8){$('#nerr').textContent='Servono almeno 8 caratteri.';return}
+  if(a!==$('#np2').value){$('#nerr').textContent='Le due password non coincidono.';return}
+  var b=$('#nb');b.disabled=true;var r=await sb.auth.updateUser({password:a});
+  if(r.error){b.disabled=false;$('#nerr').textContent=r.error.message;return}
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(x){}
+  S.user=r.data.user;await start()}}
 function renderSetup(){
  $('#app').innerHTML='<div class="login" style="max-width:560px"><h2>Database da preparare</h2><div class="card setup">Le tabelle del gestionale non esistono ancora (o il tuo utente non ha accesso).\n\n1. Apri Supabase › SQL Editor.\n2. Incolla ed esegui <b>01_schema_azienda.sql</b> (prima sostituisci l’email nel punto 7).\n3. Esegui poi i tre file <b>02_import_storico</b>.\n4. Ricarica questa pagina.</div><button class="btn g" id="lo">Esci</button></div>';
  $('#lo').onclick=logout}
 async function logout(){await sb.auth.signOut();S.user=null;S.prof=null;renderLogin()}
 async function boot(){
- try{var r=await sb.auth.getSession();if(!r.data.session)return renderLogin();S.user=r.data.session.user;await start()}catch(e){renderLogin('Impossibile collegarsi al database: '+e.message)}}
+ try{if(REC){var rs=await sb.auth.getSession();if(rs.data.session){S.user=rs.data.session.user;return renderNewPass()}return renderLogin('Il link non è valido o è scaduto: richiedine uno nuovo.')}
+ if(RECERR){try{history.replaceState(null,'',location.pathname+location.search)}catch(x){}return renderLogin('Il link non è valido o è scaduto: richiedine uno nuovo.')}
+ var r=await sb.auth.getSession();if(!r.data.session)return renderLogin();S.user=r.data.session.user;await start()}catch(e){renderLogin('Impossibile collegarsi al database: '+e.message)}}
 async function start(){
  $('#app').innerHTML='<div class="login"><p class="mut">Caricamento…</p></div>';
  var p=await sb.from('az_profili').select('*').eq('id',S.user.id).maybeSingle();
@@ -306,9 +328,12 @@ function csv(){var rows=laRows(),q=function(s){return'"'+String(s==null?'':s).re
 function vTeam(){var ym=today().slice(0,7),yy=today().slice(0,4),hm={},hy={};S.att.forEach(function(a){if(a.data.slice(0,4)===yy){hy[a.operatore]=(hy[a.operatore]||0)+Number(a.ore);if(a.data.slice(0,7)===ym)hm[a.operatore]=(hm[a.operatore]||0)+Number(a.ore)}});
  var names={};S.profili.forEach(function(p){names[p.nome.toLowerCase()]=1});var orfani=Object.keys(S.att.reduce(function(m,a){if(!a.user_id&&a.operatore)m[a.operatore]=1;return m},{})).filter(function(n){return!names[n.toLowerCase()]});
  var o=function(a,v){return a.map(function(x){return'<option value="'+x+'"'+(x===v?' selected':'')+'>'+x+'</option>'}).join('')};
- return'<h2>Squadra</h2><div class="card scroll"><table><tr><th>Nome</th><th>Ruolo</th><th>Contratto</th><th>Attivo</th><th class="n">Ore mese</th><th class="n">Ore anno</th><th></th></tr>'+S.profili.map(function(p){return'<tr data-p="'+p.id+'"><td><input class="tn" value="'+esc(p.nome)+'" style="min-width:110px"></td><td><select class="tr">'+o(['dipendente','master'],p.ruolo)+'</select></td><td><select class="tc">'+o(['fisso','stagionale','titolare'],p.contratto)+'</select></td><td><input class="ta" type="checkbox" style="width:auto"'+(p.attivo?' checked':'')+'></td><td class="n">'+fore(hm[p.nome]||0)+'</td><td class="n">'+fore(hy[p.nome]||0)+'</td><td><button class="btn sm" data-psave="'+p.id+'">Salva</button></td></tr>'}).join('')+'</table></div>'+
+ return'<h2>Squadra</h2><div class="card scroll"><table><tr><th>Nome</th><th>Ruolo</th><th>Contratto</th><th>Attivo</th><th class="n">Ore mese</th><th class="n">Ore anno</th><th></th></tr>'+S.profili.map(function(p){return'<tr data-p="'+p.id+'"><td><input class="tn" value="'+esc(p.nome)+'" style="min-width:110px"></td><td><select class="tr" style="min-width:125px">'+o(['dipendente','master'],p.ruolo)+'</select></td><td><select class="tc" style="min-width:125px">'+o(['fisso','stagionale','titolare'],p.contratto)+'</select></td><td><input class="ta" type="checkbox" style="width:auto"'+(p.attivo?' checked':'')+'></td><td class="n">'+fore(hm[p.nome]||0)+'</td><td class="n">'+fore(hy[p.nome]||0)+'</td><td style="white-space:nowrap"><button class="btn sm" data-psave="'+p.id+'">Salva</button> <button class="btn g sm" data-pwd="'+p.id+'">Password</button></td></tr>'}).join('')+'</table></div>'+
  '<div class="card"><h3>Come aggiungere un dipendente</h3><p class="mut">1. In Supabase vai su Authentication › Users › Add user, inserisci email e password e spunta “Auto Confirm User”.<br>2. Ricarica questa pagina: compare qui con il ruolo “dipendente”.<br>3. Scrivi il nome e il tipo di contratto e premi Salva. Comunica email e password al dipendente.</p><p class="mut">Gli account del Rimessaggio compaiono qui come “dipendente” e restano senza accesso a questa area master. Metti “attivo” a no per chi non deve usare il gestionale.</p></div>'+
  (orfani.length?'<div class="card"><h3>Nomi presenti solo nello storico</h3><p class="mut">'+orfani.map(esc).join(', ')+'. Per unire lo storico a un nuovo account, scrivi lo stesso nome nel profilo: le statistiche li conteggeranno insieme.</p></div>':'')}
+function openPwd(id){var p=S.profili.find(function(x){return x.id===id}),d=$('#dlg');d.onclick=null;
+ d.innerHTML=`<h3>Nuova password per ${esc(p.nome)}</h3><p class="mut">Scegli una password di almeno 8 caratteri e comunicala di persona. Potrà accedere subito.</p><label>Nuova password</label><input id="pw1" type="text" autocomplete="off"><div class="row" style="margin-top:16px"><button class="btn sp" id="pw-ok">Imposta</button><button class="btn g" data-act="close">Annulla</button></div>`;
+ $('#pw-ok').onclick=async function(){var v=$('#pw1').value;if(v.length<8)return toast('Servono almeno 8 caratteri.');var r=await sb.rpc('az_imposta_password',{p_user:id,p_pwd:v});if(r.error)return fail(r.error);$('#dlg').close();toast('Password cambiata ✓')};d.showModal()}
 async function saveProf(id){var tr=document.querySelector('tr[data-p="'+id+'"]');var row={nome:tr.querySelector('.tn').value.trim(),ruolo:tr.querySelector('.tr').value,contratto:tr.querySelector('.tc').value,attivo:tr.querySelector('.ta').checked};
  if(!row.nome)return toast('Il nome è obbligatorio.');if(id===S.user.id&&(row.ruolo!=='master'||!row.attivo))return toast('Non puoi togliere a te stesso il ruolo master.');
  var r=await sb.from('az_profili').update(row).eq('id',id);if(r.error)return fail(r.error);var p=await sb.from('az_profili').select('*').order('nome');S.profili=p.data;view();toast('Salvato ✓')}
@@ -327,6 +352,7 @@ document.addEventListener('click',async function(ev){var t=ev.target,b;
  if(b=t.closest('[data-done]')){var q=b.dataset.done.split('|');toggleDone(+q[0],q[1]);return}
  if(b=t.closest('[data-pedit]')){openPian(+b.dataset.pedit);return}
  if(b=t.closest('[data-psave]')){saveProf(b.dataset.psave);return}
+ if(b=t.closest('[data-pwd]')){openPwd(b.dataset.pwd);return}
  var tip=t.closest('[data-tip]');if(tip&&matchMedia('(hover:none)').matches)showTip(tip,ev)});
 document.addEventListener('change',function(ev){var id=ev.target.id;
  if(id==='ore-y'){S.ore.y=+ev.target.value;view()}
