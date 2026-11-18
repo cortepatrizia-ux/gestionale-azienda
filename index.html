@@ -167,28 +167,29 @@ async function start(){
 async function loadAll(){
  var a=await sb.from('az_aree').select('*').eq('attiva',true).order('ordine');if(a.error)throw a.error;S.aree=a.data;
  if(isM()){var pr=await sb.from('az_profili').select('*').order('nome');if(pr.error)throw pr.error;S.profili=pr.data}
- await loadAtt();await loadPian();if(isM())await loadVig();else await loadFilari();await loadFit();await loadSca()}
+ await loadAtt();await loadPian();if(isM())await loadVig();else await loadFilari();await loadFit();if(isM())await loadSca();else await loadDoc()}
 async function loadAtt(){S.att=await fetchAll(function(){var q=sb.from('az_attivita').select('*').order('data',{ascending:false}).order('id',{ascending:false});return isM()?q:q.eq('user_id',S.user.id)})}
 async function loadPian(){
  var p=await sb.from('az_pianificazioni').select('*').order('data');if(p.error)throw p.error;S.pian=p.data;
  var f=await sb.from('az_pian_fatti').select('*').limit(5000);if(f.error)throw f.error;S.fatti=f.data}
 
 /* ============ SHELL ============ */
-function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['vig','leaf','Vigneto'],['fit','flask','Trattamenti'],['sca','clock','Scadenze'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore'],['prod','book','Schede prodotti']]}
+function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['vig','leaf','Vigneto'],['fit','flask','Trattamenti'],['sca','clock','Scadenze'],['doc','book','Documenti'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore'],['prod','book','Schede prodotti'],['doc','book','I miei documenti']]}
 function render(){
  var nav=navItems().map(function(n){return'<button class="n'+(S.view===n[0]?' on':'')+'" data-go="'+n[0]+'">'+ico(n[1])+'<span>'+n[2]+'</span></button>'}).join('');
  var soon=isM()?'<div class="soon"><b>In arrivo</b>Costi · Rimessaggio</div>':'';
  $('#app').innerHTML='<div class="top"><b>Azienda Agricola</b><button class="btn g sm" data-act="logout">Esci</button></div><div class="shell"><nav class="nav"><div class="brand">Azienda Agricola<small>'+(isM()?'Pagina master':'Area dipendente')+'</small></div>'+nav+soon+'<div class="who">'+esc(S.prof.nome)+'<br><a href="#" data-act="logout" style="color:var(--acc)">Esci</a></div></nav><main id="main"></main></div>';
  view()}
 function view(){
- var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam,vig:vVig,fit:vFit,prod:vProdEmp,sca:vSca}[S.view];$('#main').innerHTML=v();
+ var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam,vig:vVig,fit:vFit,prod:vProdEmp,sca:vSca,doc:vDocs}[S.view];$('#main').innerHTML=v();
  document.querySelectorAll('.nav button.n').forEach(function(b){b.classList.toggle('on',b.dataset.go===S.view)})}
 
 
 /* ============ SCADENZIARIO ============ */
 var SCA_CAT={patentino:'Patentino',attestato:'Attestato / corso',macchinario:'Macchinario',certificazione:'Certificazione',assicurazione:'Assicurazione',altro:'Altro'};
 S.sca=S.sca||[];
-async function loadSca(){try{var r=await sb.from('az_scadenze').select('*').order('scadenza');S.sca=r.error?[]:r.data;S.scaErr=r.error||null}catch(x){S.sca=[];S.scaErr=x}}
+async function loadDoc(){S.docErr=null;try{var m=await sb.from('az_mezzi').select('*').order('nome');var d=await sb.from('az_documenti').select('*').order('creato_il',{ascending:false});if(m.error||d.error){S.mezzi=[];S.doc=[];S.docErr=m.error||d.error}else{S.mezzi=m.data;S.doc=d.data}}catch(x){S.mezzi=[];S.doc=[];S.docErr=x}}
+async function loadSca(){await loadDoc();try{var r=await sb.from('az_scadenze').select('*').order('scadenza');S.sca=r.error?[]:r.data;S.scaErr=r.error||null}catch(x){S.sca=[];S.scaErr=x}}
 function scaGg(x){return Math.round((pd(x.scadenza)-pd(today()))/864e5)}
 function scaStato(x){var g=scaGg(x);return g<0?'scaduta':(g<=x.preavviso_gg?'in scadenza':'ok')}
 function patScad(uid){return(S.sca||[]).some(function(x){return x.categoria==='patentino'&&x.profilo_id===uid&&x.scadenza<today()})}
@@ -197,19 +198,55 @@ function scaBanner(){if(!isM())return'';var l=(S.sca||[]).filter(function(x){ret
 function vSca(){if(S.scaErr)return'<h2>Scadenze</h2><div class="card"><p>Mancano le tabelle: esegui lo script <b>13_scadenziario.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.</p></div>';
  var nm={};S.profili.forEach(function(p){nm[p.id]=p.nome});
  var rows=(S.sca||[]).map(function(x){var st=scaStato(x),g=scaGg(x);var tag=st==='scaduta'?'<span class="tag w" style="background:#f3d4d0;color:#8a2a1f">scaduta</span>':st==='in scadenza'?'<span class="tag w">in scadenza</span>':'<span class="tag">ok</span>';
-  return'<tr><td><b>'+esc(x.titolo)+'</b>'+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</td><td>'+esc(SCA_CAT[x.categoria]||x.categoria)+'</td><td>'+(x.profilo_id?esc(nm[x.profilo_id]||'—'):'—')+'</td><td>'+pd(x.scadenza).toLocaleDateString('it-IT')+'</td><td class="n">'+(g<0?g+' gg':'+'+g+' gg')+'</td><td>'+tag+'</td><td><button class="btn g sm" data-act="editsca" data-id="'+x.id+'">Modifica</button></td></tr>'}).join('');
+  return'<tr><td><b>'+esc(x.titolo)+'</b>'+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</td><td>'+esc(SCA_CAT[x.categoria]||x.categoria)+'</td><td>'+(x.profilo_id?esc(nm[x.profilo_id]||'—'):(x.mezzo_id?esc(mzNome(x.mezzo_id)):'—'))+'</td><td>'+pd(x.scadenza).toLocaleDateString('it-IT')+'</td><td class="n">'+(g<0?g+' gg':'+'+g+' gg')+'</td><td>'+tag+'</td><td>'+docBtn(scaDoc(x.id))+' <button class="btn g sm" data-act="editsca" data-id="'+x.id+'">Modifica / rinnova</button></td></tr>'}).join('');
  return'<h2>Scadenze</h2><p class="mut">Patentini, attestati, macchinari, certificazioni. Un patentino scaduto toglie il nome dall’elenco di chi può eseguire i trattamenti.</p><div class="row" style="margin:6px 0"><button class="btn" data-act="newsca">+ Nuova scadenza</button></div>'+scaBanner()+
- (rows?'<div class="card scroll"><table><tr><th>Cosa</th><th>Tipo</th><th>Persona</th><th>Scade il</th><th class="n">Giorni</th><th>Stato</th><th></th></tr>'+rows+'</table></div>':'<div class="card"><p class="mut">Nessuna scadenza inserita.</p></div>')}
+ (rows?'<div class="card scroll"><table><tr><th>Cosa</th><th>Tipo</th><th>Persona / mezzo</th><th>Scade il</th><th class="n">Giorni</th><th>Stato</th><th></th></tr>'+rows+'</table></div>':'<div class="card"><p class="mut">Nessuna scadenza inserita.</p></div>')}
+var SCA2DOC={patentino:'patentino',attestato:'corso',macchinario:'revisione',assicurazione:'assicurazione',certificazione:'altro',altro:'altro'};
+var DOC_CAT={patentino:'Patentini',corso:'Corsi sicurezza',revisione:'Revisioni mezzi',assicurazione:'Assicurazioni',altro:'Altri documenti'};
+function mzNome(id){var m=(S.mezzi||[]).find(function(x){return x.id===id});return m?m.nome+(m.targa?' ('+m.targa+')':''):'—'}
+function scaDoc(sid){return(S.doc||[]).find(function(d){return d.scadenza_id===sid&&!d.sostituito})}
+function docBtn(d,lab){if(!d)return'';return'<button class="btn g sm" data-fopen="'+esc(d.file_path)+'" data-fb="documenti">'+(lab||'Documento')+'</button>'}
+async function upDoc(file,d){var ext=(file.name.split('.').pop()||'pdf').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'pdf';var pers=d.profilo_id&&(d.categoria==='patentino'||d.categoria==='corso');
+ var path=(pers?'u/'+d.profilo_id+'/':'m/')+Date.now()+'_'+d.titolo.toUpperCase().replace(/[^A-Z0-9]+/g,'_').slice(0,40)+'.'+ext;
+ var up=await sb.storage.from('documenti').upload(path,file,{contentType:file.type||'application/pdf'});if(up.error)throw up.error;
+ var r=await sb.from('az_documenti').insert({titolo:d.titolo,categoria:d.categoria,profilo_id:d.profilo_id||null,mezzo_id:d.mezzo_id||null,scadenza_id:d.scadenza_id||null,file_path:path,note:d.note||null});if(r.error)throw r.error}
+function mzOpts(sel){return'<option value="">—</option>'+(S.mezzi||[]).filter(function(m){return m.attivo||m.id===sel}).map(function(m){return'<option value="'+m.id+'"'+(m.id===sel?' selected':'')+'>'+esc(m.nome+(m.targa?' ('+m.targa+')':''))+'</option>'}).join('')}
 function openSca(id){var x=id?S.sca.find(function(y){return y.id===id}):{categoria:'attestato',preavviso_gg:30,scadenza:today()};
- var d=dlgOpen('<h3>'+(id?'Modifica scadenza':'Nuova scadenza')+'</h3><label>Cosa scade</label><input id="sc-t" value="'+esc(x.titolo||'')+'" placeholder="es. Patentino fitosanitari, Revisione trattore">'+
+ var d=dlgOpen('<h3>'+(id?'Modifica / rinnova scadenza':'Nuova scadenza')+'</h3><label>Cosa scade</label><input id="sc-t" value="'+esc(x.titolo||'')+'" placeholder="es. Patentino fitosanitari, Revisione trattore">'+
  '<div class="grid2"><div><label>Tipo</label><select id="sc-c">'+Object.keys(SCA_CAT).map(function(k){return'<option value="'+k+'"'+(k===x.categoria?' selected':'')+'>'+SCA_CAT[k]+'</option>'}).join('')+'</select></div><div><label>Persona (se riguarda un dipendente)</label><select id="sc-p"><option value="">—</option>'+S.profili.filter(function(p){return p.attivo}).map(function(p){return'<option value="'+p.id+'"'+(p.id===x.profilo_id?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('')+'</select></div></div>'+
- '<div class="grid2"><div><label>Data di scadenza</label><input type="date" id="sc-d" value="'+x.scadenza+'"></div><div><label>Avvisami (giorni prima)</label><input id="sc-g" inputmode="numeric" value="'+x.preavviso_gg+'"></div></div><label>Note</label><textarea id="sc-n" rows="2">'+esc(x.note||'')+'</textarea>'+
+ '<label>Mezzo (se riguarda un mezzo)</label><select id="sc-m">'+mzOpts(x.mezzo_id)+'</select>'+
+ '<div class="grid2"><div><label>Data di scadenza</label><input type="date" id="sc-d" value="'+x.scadenza+'"></div><div><label>Avvisami (giorni prima)</label><input id="sc-g" inputmode="numeric" value="'+x.preavviso_gg+'"></div></div>'+
+ '<label>Documento (PDF o foto)'+(id&&scaDoc(id)?' — se ne carichi uno nuovo, il vecchio va nello storico':'')+'</label><input type="file" id="sc-f" accept="application/pdf,image/*"><label>Note</label><textarea id="sc-n" rows="2">'+esc(x.note||'')+'</textarea>'+
  '<div class="row" style="margin-top:14px"><button class="btn sp" id="sc-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>'+(id?'<button class="btn d" style="width:100%;margin-top:10px" id="sc-del">Elimina</button>':''),'min(96vw,560px)');
  $('#sc-ok').onclick=async function(){var t=$('#sc-t').value.trim();if(!t||!$('#sc-d').value)return toast('Scrivi cosa scade e la data.');
-  var row={titolo:t,categoria:$('#sc-c').value,profilo_id:$('#sc-p').value||null,scadenza:$('#sc-d').value,preavviso_gg:parseInt($('#sc-g').value,10)||30,note:$('#sc-n').value.trim()||null};
-  var r=id?await sb.from('az_scadenze').update(row).eq('id',id):await sb.from('az_scadenze').insert(row);if(r.error)return fail(r.error);await loadSca();$('#dlg').close();view();toast('Salvato ✓')};
- if(id)$('#sc-del').onclick=async function(){if(!confirm('Eliminare questa scadenza?'))return;var r=await sb.from('az_scadenze').delete().eq('id',id);if(r.error)return fail(r.error);await loadSca();$('#dlg').close();view()};
+  var row={titolo:t,categoria:$('#sc-c').value,profilo_id:$('#sc-p').value||null,mezzo_id:+$('#sc-m').value||null,scadenza:$('#sc-d').value,preavviso_gg:parseInt($('#sc-g').value,10)||30,note:$('#sc-n').value.trim()||null};
+  try{var r=id?await sb.from('az_scadenze').update(row).eq('id',id):await sb.from('az_scadenze').insert(row).select().single();if(r.error)throw r.error;var sid=id||r.data.id;
+   var f=$('#sc-f').files[0];if(f){if(id){var o=await sb.from('az_documenti').update({sostituito:true}).eq('scadenza_id',sid);if(o.error)throw o.error}await upDoc(f,{titolo:t,categoria:SCA2DOC[row.categoria],profilo_id:row.profilo_id,mezzo_id:row.mezzo_id,scadenza_id:sid})}
+   await loadSca();$('#dlg').close();view();toast('Salvato ✓')}catch(e){fail(e)}};
+ if(id)$('#sc-del').onclick=async function(){if(!confirm('Eliminare questa scadenza? I documenti restano nell’archivio.'))return;var r=await sb.from('az_scadenze').delete().eq('id',id);if(r.error)return fail(r.error);await loadSca();$('#dlg').close();view()};
  d.showModal()}
+/* ---- archivio documenti e mezzi ---- */
+S.dfp=S.dfp||'';S.dfm=S.dfm||'';S.dfs=S.dfs||false;
+function vDocs(){if(!isM())return vMyDoc();
+ if(S.docErr)return'<h2>Documenti</h2><div class="card"><p>Mancano le tabelle: esegui lo script <b>14_archivio_mezzi.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.</p></div>';
+ var nm={};S.profili.forEach(function(p){nm[p.id]=p.nome});
+ var l=(S.doc||[]).filter(function(d){return(S.dfs||!d.sostituito)&&(!S.dfp||d.profilo_id===S.dfp)&&(!S.dfm||String(d.mezzo_id)===S.dfm)});
+ var sec=Object.keys(DOC_CAT).map(function(k){var r=l.filter(function(d){return d.categoria===k});if(!r.length)return'';
+  return'<h3>'+DOC_CAT[k]+'</h3><div class="card scroll"><table><tr><th>Documento</th><th>Persona / mezzo</th><th>Scadenza</th><th>Caricato il</th><th></th></tr>'+r.map(function(d){var sc=d.scadenza_id&&(S.sca||[]).find(function(x){return x.id===d.scadenza_id});
+   return'<tr><td><b>'+esc(d.titolo)+'</b>'+(d.sostituito?' <span class="tag">storico</span>':'')+(d.note?'<div class="mut">'+esc(d.note)+'</div>':'')+'</td><td>'+(d.profilo_id?esc(nm[d.profilo_id]||'—'):(d.mezzo_id?esc(mzNome(d.mezzo_id)):'—'))+'</td><td>'+(sc&&!d.sostituito?pd(sc.scadenza).toLocaleDateString('it-IT'):'—')+'</td><td>'+new Date(d.creato_il).toLocaleDateString('it-IT')+'</td><td>'+docBtn(d,'Apri')+'</td></tr>'}).join('')+'</table></div>'}).join('');
+ var mz=(S.mezzi||[]).map(function(m){return'<tr><td><b>'+esc(m.nome)+'</b>'+(m.attivo?'':' <span class="tag">non attivo</span>')+'</td><td>'+esc(m.tipo||'')+'</td><td>'+esc(m.targa||'')+'</td><td><button class="btn g sm" data-act="editmz" data-id="'+m.id+'">Modifica</button></td></tr>'}).join('');
+ return'<h2>Documenti</h2><p class="mut">Archivio di patentini, corsi sicurezza, revisioni e assicurazioni. I documenti caricati dalle Scadenze compaiono qui da soli.</p><div class="row" style="margin:6px 0;flex-wrap:wrap"><button class="btn" data-act="newdoc">+ Nuovo documento</button> <select id="df-p"><option value="">Tutte le persone</option>'+S.profili.map(function(p){return'<option value="'+p.id+'"'+(p.id===S.dfp?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('')+'</select> <select id="df-m"><option value="">Tutti i mezzi</option>'+(S.mezzi||[]).map(function(m){return'<option value="'+m.id+'"'+(String(m.id)===S.dfm?' selected':'')+'>'+esc(m.nome)+'</option>'}).join('')+'</select> <label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="df-s"'+(S.dfs?' checked':'')+'> mostra lo storico</label></div>'+(sec||'<div class="card"><p class="mut">Nessun documento.</p></div>')+
+ '<h3>Mezzi</h3><div class="row" style="margin:6px 0"><button class="btn g" data-act="newmz">+ Nuovo mezzo</button></div>'+(mz?'<div class="card scroll"><table><tr><th>Mezzo</th><th>Tipo</th><th>Targa</th><th></th></tr>'+mz+'</table></div>':'<div class="card"><p class="mut">Nessun mezzo: aggiungi trattori, irroratrice, ecc.</p></div>')}
+function vMyDoc(){var l=(S.doc||[]).filter(function(d){return!d.sostituito});
+ return'<h2>I miei documenti</h2><p class="mut">Il tuo patentino e i tuoi attestati.</p>'+(S.docErr?'<div class="card">Elenco non disponibile.</div>':(l.length?'<div class="card scroll"><table><tr><th>Documento</th><th>Tipo</th><th></th></tr>'+l.map(function(d){return'<tr><td><b>'+esc(d.titolo)+'</b></td><td>'+esc(DOC_CAT[d.categoria]||'')+'</td><td>'+docBtn(d,'Apri')+'</td></tr>'}).join('')+'</table></div>':'<div class="card"><p class="mut">Nessun documento caricato.</p></div>'))}
+function openDoc(){var d=dlgOpen('<h3>Nuovo documento</h3><label>Titolo</label><input id="dc-t" placeholder="es. Libretto trattore, Corso antincendio"><div class="grid2"><div><label>Tipo</label><select id="dc-c">'+Object.keys(DOC_CAT).map(function(k){return'<option value="'+k+'">'+DOC_CAT[k]+'</option>'}).join('')+'</select></div><div><label>Persona</label><select id="dc-p"><option value="">—</option>'+S.profili.filter(function(p){return p.attivo}).map(function(p){return'<option value="'+p.id+'">'+esc(p.nome)+'</option>'}).join('')+'</select></div></div><label>Mezzo</label><select id="dc-m">'+mzOpts()+'</select><label>File (PDF o foto)</label><input type="file" id="dc-f" accept="application/pdf,image/*"><label>Note</label><textarea id="dc-n" rows="2"></textarea><p class="mut">Se il documento ha una scadenza, caricalo da Scadenze: così lo trovi anche qui.</p><div class="row" style="margin-top:14px"><button class="btn sp" id="dc-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>','min(96vw,560px)');
+ $('#dc-ok').onclick=async function(){var t=$('#dc-t').value.trim(),f=$('#dc-f').files[0];if(!t||!f)return toast('Servono titolo e file.');
+  try{await upDoc(f,{titolo:t,categoria:$('#dc-c').value,profilo_id:$('#dc-p').value||null,mezzo_id:+$('#dc-m').value||null,note:$('#dc-n').value.trim()});await loadDoc();$('#dlg').close();view();toast('Salvato ✓')}catch(e){fail(e)}};d.showModal()}
+function openMezzo(id){var m=id?S.mezzi.find(function(x){return x.id===id}):{attivo:true};
+ var d=dlgOpen('<h3>'+(id?'Modifica mezzo':'Nuovo mezzo')+'</h3><label>Nome</label><input id="mz-n" value="'+esc(m.nome||'')+'" placeholder="es. Trattore Landini"><div class="grid2"><div><label>Tipo</label><input id="mz-t" value="'+esc(m.tipo||'')+'" placeholder="trattore, atomizzatore…"></div><div><label>Targa</label><input id="mz-g" value="'+esc(m.targa||'')+'"></div></div><label><input type="checkbox" id="mz-a"'+(m.attivo?' checked':'')+'> Attivo</label><div class="row" style="margin-top:14px"><button class="btn sp" id="mz-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>','min(96vw,480px)');
+ $('#mz-ok').onclick=async function(){var n=$('#mz-n').value.trim();if(!n)return toast('Scrivi il nome del mezzo.');var row={nome:n,tipo:$('#mz-t').value.trim()||null,targa:$('#mz-g').value.trim()||null,attivo:$('#mz-a').checked};
+  var r=id?await sb.from('az_mezzi').update(row).eq('id',id):await sb.from('az_mezzi').insert(row);if(r.error)return fail(r.error);await loadDoc();$('#dlg').close();view();toast('Salvato ✓')};d.showModal()}
+
 
 /* ---- caricamento PDF in blocco ---- */
 function bulkNorm(s){return String(s).toUpperCase().replace(/[^A-Z0-9]/g,'')}
@@ -645,7 +682,7 @@ async function fExport(k){var doc=getDoc(k),name=({quad:'Quaderno_di_campagna_',
  if(k.slice(-2)==='-p'){var h='<h2 style="text-align:center;margin:0 0 8px">'+esc(doc.head.length?String((doc.head[0]||[''])[0]):'')+'</h2>'+doc.head.slice(1).filter(function(r){return r.length}).map(function(r){return'<div>'+r.map(esc).join(' &nbsp; ')+'</div>'}).join('')+'<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:11px"><tr>'+doc.cols.map(function(c){return'<th style="border:1px solid #000;padding:4px;text-align:left">'+esc(c)+'</th>'}).join('')+'</tr>'+doc.body.map(function(r){return'<tr>'+r.map(function(c){return'<td style="border:1px solid #000;padding:3px 4px">'+esc(c==null?'':String(c).replace('.',','))+'</td>'}).join('')+'</tr>'}).join('')+'</table><p style="margin-top:30px;font-size:11px">Timbro e firma ______________________</p>';
   var p=document.createElement('div');p.id='printdoc';p.innerHTML=h;document.body.appendChild(p);window.print();setTimeout(function(){p.remove()},500);return}
  try{await loadXlsx();var ws=XLSX.utils.aoa_to_sheet(doc.aoa),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Foglio1');XLSX.writeFile(wb,name+'.xlsx')}catch(e){dlCsv(name,doc.aoa);toast('Excel non disponibile: scaricato in formato CSV (si apre con Excel).')}}
-async function fOpenFile(path){var r=await sb.storage.from('schede').createSignedUrl(path,3600);if(r.error)return fail(r.error);window.open(r.data.signedUrl,'_blank')}
+async function fOpenFile(path,bk){var r=await sb.storage.from(bk||'schede').createSignedUrl(path,3600);if(r.error)return fail(r.error);window.open(r.data.signedUrl,'_blank')}
 
 var FIT_ACT={fnew:function(){openInt()},fnewc:function(){openInt({tipo:'concimazione'})},fimp:openImp,fnewp:function(){openProd()},fbulk:openBulk,fbolla:openBolla,finv:openInv};
 document.addEventListener('click',function(ev){var t=ev.target,b;
@@ -654,9 +691,10 @@ document.addEventListener('click',function(ev){var t=ev.target,b;
  if(b=t.closest('[data-fedit]')){var i=it(+b.dataset.fedit);if(i)openInt({edit:i});return}
  if(b=t.closest('[data-fexp]')){fExport(b.dataset.fexp);return}
  if(b=t.closest('[data-fpedit]')){var p=prodById(+b.dataset.fpedit);if(p)openProd(p);return}
- if(b=t.closest('[data-fopen]')){fOpenFile(b.dataset.fopen);return}
+ if(b=t.closest('[data-fopen]')){fOpenFile(b.dataset.fopen,b.dataset.fb);return}
  if(b=t.closest('[data-fbdel]')){if(!confirm('Eliminare questa bolla?'))return;sb.from('az_bolle').delete().eq('id',+b.dataset.fbdel).then(async function(r){if(r.error)return fail(r.error);await loadFit();view()});return}});
 document.addEventListener('change',function(ev){if(ev.target.id==='ft-y'){F.anno=+ev.target.value;view()}});
+document.addEventListener('change',function(ev){var i=ev.target.id;if(i==='df-p'){S.dfp=ev.target.value;view()}else if(i==='df-m'){S.dfm=ev.target.value;view()}else if(i==='df-s'){S.dfs=ev.target.checked;view()}});
 $('#dlg').addEventListener('close',function(){this.style.width='';this.oninput=null;this.onchange=null});
 
 /* ============ EVENTI ============ */
@@ -667,7 +705,7 @@ document.addEventListener('click',async function(ev){var t=ev.target,b;
  if(b=t.closest('[data-sdel]')){if(!confirm('Eliminare questa voce?'))return;var r2=await sb.from('az_sostituzioni').delete().eq('id',+b.dataset.sdel);if(r2.error)return fail(r2.error);await loadVig();view();return}
  if(b=t.closest('[data-go]')){S.view=b.dataset.go;view();window.scrollTo(0,0);return}
  if(b=t.closest('[data-act]')){var a=b.dataset.act;ev.preventDefault();
-  if(a==='logout')logout();else if(FIT_ACT[a])FIT_ACT[a]();else if(a==='newsost')openSost();else if(a==='newsca')openSca();else if(a==='editsca')openSca(+b.dataset.id);else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
+  if(a==='logout')logout();else if(FIT_ACT[a])FIT_ACT[a]();else if(a==='newsost')openSost();else if(a==='newsca')openSca();else if(a==='newdoc')openDoc();else if(a==='newmz')openMezzo();else if(a==='editmz')openMezzo(+b.dataset.id);else if(a==='editsca')openSca(+b.dataset.id);else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
   else if(a==='laall'){S.la.mese='';view()}else if(a==='tgl')b.closest('.cc').classList.toggle('t');return}
  if(b=t.closest('[data-edit]')){var e=S.att.find(function(x){return x.id===+b.dataset.edit});if(e)openAtt({edit:e});return}
  if(b=t.closest('[data-fatto]')){var p=b.dataset.fatto.split('|'),pp=S.pian.find(function(x){return x.id===+p[0]});openAtt({pian:pp.id,occ:p[1],op:pp.titolo,area_id:pp.area_id,settore:pp.area_id&&area(pp.area_id)?area(pp.area_id).settore:null});return}
