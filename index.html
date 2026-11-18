@@ -491,8 +491,9 @@ function altHtml(al){return al.map(function(a){return'<div class="al al-'+a[0]+'
 function schedaLink(p,k){var path=p[k+'_path'],url=p[k+'_url'],lab=k==='scheda'?'Scheda prodotto':'Scheda di sicurezza';
  if(path)return'<button class="btn g sm" data-fopen="'+esc(path)+'">'+lab+'</button>';
  if(url)return'<a class="btn g sm" target="_blank" rel="noopener" href="'+esc(url)+'">'+lab+'</a>';
+ if(p.tipo==='concime')return'<span class="mut">—</span>';
  return isM()?'<span class="tag w" data-tip="Carica il PDF da Modifica">'+(k==='scheda'?'scheda mancante':'SDS mancante')+'</span>':'<span class="mut">—</span>'}
-function sdsMiss(){return F.prod.filter(function(p){return p.attivo&&!p.sds_url&&!p.sds_path})}
+function sdsMiss(){return F.prod.filter(function(p){return p.attivo&&p.tipo!=='concime'&&!p.sds_url&&!p.sds_path})}
 /* ---- viste ---- */
 function vFit(){if(F.err){var m=F.err.message||'';return'<h2>Trattamenti</h2><div class="card"><p>'+(/does not exist|schema cache|42P01/i.test(m+(F.err.code||''))?'Mancano le tabelle dei trattamenti: esegui lo script <b>07_fitosanitari.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.':'Errore: '+esc(m))+'</p></div>'}
  var yrs={};F.int.forEach(function(i){yrs[i.data.slice(0,4)]=1});yrs[new Date().getFullYear()]=1;var yl=Object.keys(yrs).sort().reverse();
