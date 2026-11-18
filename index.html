@@ -167,22 +167,66 @@ async function start(){
 async function loadAll(){
  var a=await sb.from('az_aree').select('*').eq('attiva',true).order('ordine');if(a.error)throw a.error;S.aree=a.data;
  if(isM()){var pr=await sb.from('az_profili').select('*').order('nome');if(pr.error)throw pr.error;S.profili=pr.data}
- await loadAtt();await loadPian();if(isM())await loadVig();else await loadFilari();await loadFit()}
+ await loadAtt();await loadPian();if(isM())await loadVig();else await loadFilari();await loadFit();await loadSca()}
 async function loadAtt(){S.att=await fetchAll(function(){var q=sb.from('az_attivita').select('*').order('data',{ascending:false}).order('id',{ascending:false});return isM()?q:q.eq('user_id',S.user.id)})}
 async function loadPian(){
  var p=await sb.from('az_pianificazioni').select('*').order('data');if(p.error)throw p.error;S.pian=p.data;
  var f=await sb.from('az_pian_fatti').select('*').limit(5000);if(f.error)throw f.error;S.fatti=f.data}
 
 /* ============ SHELL ============ */
-function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['vig','leaf','Vigneto'],['fit','flask','Trattamenti'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore'],['prod','book','Schede prodotti']]}
+function navItems(){return isM()?[['stat','chart','Statistiche'],['cal','cal','Calendario'],['vig','leaf','Vigneto'],['fit','flask','Trattamenti'],['sca','clock','Scadenze'],['att','list','Attività'],['team','team','Squadra']]:[['oggi','home','Oggi'],['ore','clock','Le mie ore'],['prod','book','Schede prodotti']]}
 function render(){
  var nav=navItems().map(function(n){return'<button class="n'+(S.view===n[0]?' on':'')+'" data-go="'+n[0]+'">'+ico(n[1])+'<span>'+n[2]+'</span></button>'}).join('');
- var soon=isM()?'<div class="soon"><b>In arrivo</b>Scadenze · Costi · Rimessaggio</div>':'';
+ var soon=isM()?'<div class="soon"><b>In arrivo</b>Costi · Rimessaggio</div>':'';
  $('#app').innerHTML='<div class="top"><b>Azienda Agricola</b><button class="btn g sm" data-act="logout">Esci</button></div><div class="shell"><nav class="nav"><div class="brand">Azienda Agricola<small>'+(isM()?'Pagina master':'Area dipendente')+'</small></div>'+nav+soon+'<div class="who">'+esc(S.prof.nome)+'<br><a href="#" data-act="logout" style="color:var(--acc)">Esci</a></div></nav><main id="main"></main></div>';
  view()}
 function view(){
- var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam,vig:vVig,fit:vFit,prod:vProdEmp}[S.view];$('#main').innerHTML=v();
+ var v={oggi:vOggi,ore:vOre,stat:vStat,cal:vCal,att:vAtt,team:vTeam,vig:vVig,fit:vFit,prod:vProdEmp,sca:vSca}[S.view];$('#main').innerHTML=v();
  document.querySelectorAll('.nav button.n').forEach(function(b){b.classList.toggle('on',b.dataset.go===S.view)})}
+
+
+/* ============ SCADENZIARIO ============ */
+var SCA_CAT={patentino:'Patentino',attestato:'Attestato / corso',macchinario:'Macchinario',certificazione:'Certificazione',assicurazione:'Assicurazione',altro:'Altro'};
+S.sca=S.sca||[];
+async function loadSca(){try{var r=await sb.from('az_scadenze').select('*').order('scadenza');S.sca=r.error?[]:r.data;S.scaErr=r.error||null}catch(x){S.sca=[];S.scaErr=x}}
+function scaGg(x){return Math.round((pd(x.scadenza)-pd(today()))/864e5)}
+function scaStato(x){var g=scaGg(x);return g<0?'scaduta':(g<=x.preavviso_gg?'in scadenza':'ok')}
+function patScad(uid){return(S.sca||[]).some(function(x){return x.categoria==='patentino'&&x.profilo_id===uid&&x.scadenza<today()})}
+function scaBanner(){if(!isM())return'';var l=(S.sca||[]).filter(function(x){return scaStato(x)!=='ok'});if(!l.length)return'';
+ return'<div class="al al-warn">⚠ <b>Scadenze:</b> '+l.map(function(x){var g=scaGg(x);return esc(x.titolo)+' ('+(g<0?'scaduta da '+(-g)+' gg':'tra '+g+' gg')+')'}).join(' · ')+' <a href="#" data-go="sca">Apri scadenziario</a></div>'}
+function vSca(){if(S.scaErr)return'<h2>Scadenze</h2><div class="card"><p>Mancano le tabelle: esegui lo script <b>13_scadenziario.sql</b> in Supabase (SQL Editor), poi ricarica la pagina.</p></div>';
+ var nm={};S.profili.forEach(function(p){nm[p.id]=p.nome});
+ var rows=(S.sca||[]).map(function(x){var st=scaStato(x),g=scaGg(x);var tag=st==='scaduta'?'<span class="tag w" style="background:#f3d4d0;color:#8a2a1f">scaduta</span>':st==='in scadenza'?'<span class="tag w">in scadenza</span>':'<span class="tag">ok</span>';
+  return'<tr><td><b>'+esc(x.titolo)+'</b>'+(x.note?'<div class="mut">'+esc(x.note)+'</div>':'')+'</td><td>'+esc(SCA_CAT[x.categoria]||x.categoria)+'</td><td>'+(x.profilo_id?esc(nm[x.profilo_id]||'—'):'—')+'</td><td>'+pd(x.scadenza).toLocaleDateString('it-IT')+'</td><td class="n">'+(g<0?g+' gg':'+'+g+' gg')+'</td><td>'+tag+'</td><td><button class="btn g sm" data-act="editsca" data-id="'+x.id+'">Modifica</button></td></tr>'}).join('');
+ return'<h2>Scadenze</h2><p class="mut">Patentini, attestati, macchinari, certificazioni. Un patentino scaduto toglie il nome dall’elenco di chi può eseguire i trattamenti.</p><div class="row" style="margin:6px 0"><button class="btn" data-act="newsca">+ Nuova scadenza</button></div>'+scaBanner()+
+ (rows?'<div class="card scroll"><table><tr><th>Cosa</th><th>Tipo</th><th>Persona</th><th>Scade il</th><th class="n">Giorni</th><th>Stato</th><th></th></tr>'+rows+'</table></div>':'<div class="card"><p class="mut">Nessuna scadenza inserita.</p></div>')}
+function openSca(id){var x=id?S.sca.find(function(y){return y.id===id}):{categoria:'attestato',preavviso_gg:30,scadenza:today()};
+ var d=dlgOpen('<h3>'+(id?'Modifica scadenza':'Nuova scadenza')+'</h3><label>Cosa scade</label><input id="sc-t" value="'+esc(x.titolo||'')+'" placeholder="es. Patentino fitosanitari, Revisione trattore">'+
+ '<div class="grid2"><div><label>Tipo</label><select id="sc-c">'+Object.keys(SCA_CAT).map(function(k){return'<option value="'+k+'"'+(k===x.categoria?' selected':'')+'>'+SCA_CAT[k]+'</option>'}).join('')+'</select></div><div><label>Persona (se riguarda un dipendente)</label><select id="sc-p"><option value="">—</option>'+S.profili.filter(function(p){return p.attivo}).map(function(p){return'<option value="'+p.id+'"'+(p.id===x.profilo_id?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('')+'</select></div></div>'+
+ '<div class="grid2"><div><label>Data di scadenza</label><input type="date" id="sc-d" value="'+x.scadenza+'"></div><div><label>Avvisami (giorni prima)</label><input id="sc-g" inputmode="numeric" value="'+x.preavviso_gg+'"></div></div><label>Note</label><textarea id="sc-n" rows="2">'+esc(x.note||'')+'</textarea>'+
+ '<div class="row" style="margin-top:14px"><button class="btn sp" id="sc-ok">Salva</button><button class="btn g" data-act="close">Annulla</button></div>'+(id?'<button class="btn d" style="width:100%;margin-top:10px" id="sc-del">Elimina</button>':''),'min(96vw,560px)');
+ $('#sc-ok').onclick=async function(){var t=$('#sc-t').value.trim();if(!t||!$('#sc-d').value)return toast('Scrivi cosa scade e la data.');
+  var row={titolo:t,categoria:$('#sc-c').value,profilo_id:$('#sc-p').value||null,scadenza:$('#sc-d').value,preavviso_gg:parseInt($('#sc-g').value,10)||30,note:$('#sc-n').value.trim()||null};
+  var r=id?await sb.from('az_scadenze').update(row).eq('id',id):await sb.from('az_scadenze').insert(row);if(r.error)return fail(r.error);await loadSca();$('#dlg').close();view();toast('Salvato ✓')};
+ if(id)$('#sc-del').onclick=async function(){if(!confirm('Eliminare questa scadenza?'))return;var r=await sb.from('az_scadenze').delete().eq('id',id);if(r.error)return fail(r.error);await loadSca();$('#dlg').close();view()};
+ d.showModal()}
+
+/* ---- caricamento PDF in blocco ---- */
+function bulkNorm(s){return String(s).toUpperCase().replace(/[^A-Z0-9]/g,'')}
+var BULK_ALIAS={VAILLANT:'VALIANT',MYKONOS:'MIKONOS',CENTURYSL:'CENTURY'};
+function bulkMatch(fn){var n=bulkNorm(fn.replace(/\.pdf$/i,''));Object.keys(BULK_ALIAS).forEach(function(k){n=n.split(k).join(BULK_ALIAS[k])});var best=null,bl=0;
+ F.prod.forEach(function(p){var keys=[bulkNorm(p.nome),bulkNorm(p.nome.split(' ')[0])];if(p.reg_n)keys.push('R'+bulkNorm(p.reg_n));
+  var pn=p.nome;Object.keys(BULK_ALIAS).forEach(function(k){pn=pn.toUpperCase().split(k).join(BULK_ALIAS[k])});keys.push(bulkNorm(pn),bulkNorm(pn.split(' ')[0]));
+  keys.forEach(function(k){if(k.length<4)return;var hit=k.charAt(0)==='R'&&/^R\d+$/.test(k)?n.indexOf(k.slice(1))>=0:n.indexOf(k)>=0;if(hit&&k.length>bl){bl=k.length;best=p}})});return best}
+function bulkKind(fn){var n=bulkNorm(fn);return /SDS|SICUREZZA/.test(n)?'sds':/ETICHETT|LABEL|SCHEDATECNICA/.test(n)?'scheda':'sds'}
+function openBulk(){var d=dlgOpen('<h3>Carica PDF in blocco</h3><p class="mut">Scegli tutti i PDF insieme (schede di sicurezza ed etichette). Li abbino ai prodotti dal nome del file: controlla l’elenco e correggi se serve. I file senza “etichetta” nel nome sono trattati come schede di sicurezza.</p><input type="file" id="bk-f" accept="application/pdf" multiple><div id="bk-l"></div><div class="row" style="margin-top:14px"><button class="btn sp" id="bk-ok" style="display:none">Carica</button><button class="btn g" data-act="close">Chiudi</button></div>','min(96vw,760px)');
+ var files=[];var opts=function(sel){return'<option value="">— non caricare —</option>'+F.prod.filter(function(p){return p.attivo}).map(function(p){return'<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+esc(p.nome)+'</option>'}).join('')};
+ $('#bk-f').onchange=function(){files=Array.prototype.slice.call(this.files);$('#bk-l').innerHTML='<table style="margin-top:10px"><tr><th>File</th><th>Prodotto</th><th>Tipo</th></tr>'+files.map(function(f,i){var m=bulkMatch(f.name),k=bulkKind(f.name);if(m&&m.tipo==='concime')m=null;return'<tr data-i="'+i+'"><td style="word-break:break-all">'+esc(f.name)+'</td><td><select class="bk-p">'+opts(m&&m.id)+'</select></td><td><select class="bk-k"><option value="sds"'+(k==='sds'?' selected':'')+'>Scheda di sicurezza</option><option value="scheda"'+(k==='scheda'?' selected':'')+'>Etichetta / scheda prodotto</option></select></td></tr>'}).join('')+'</table>';$('#bk-ok').style.display=files.length?'':'none'};
+ $('#bk-ok').onclick=async function(){var btn=this;btn.disabled=true;var ok=0,err=0,seen={};
+  for(var tr of d.querySelectorAll('tr[data-i]')){var pid=+tr.querySelector('.bk-p').value;if(!pid)continue;var kind=tr.querySelector('.bk-k').value,f=files[+tr.dataset.i],p=F.prod.find(function(x){return x.id===pid});
+   try{var path=p.nome.replace(/[^A-Z0-9]+/g,'_')+'/'+kind+'_'+Date.now()+'_'+ok+'.pdf';var up=await sb.storage.from('schede').upload(path,f,{contentType:'application/pdf'});if(up.error)throw up.error;var u={};u[kind+'_path']=path;var r=await sb.from('az_prodotti').update(u).eq('id',pid);if(r.error)throw r.error;ok++;tr.style.opacity=.5}catch(x){console.error(x);err++;tr.style.background='#f3d4d0'}}
+  await loadFit();btn.disabled=false;toast(ok+' PDF caricati'+(err?' · '+err+' con errore (controlla i file in rosso)':' ✓'));if(!err){$('#dlg').close()}view()};
+ d.showModal()}
 
 /* ============ FORM ATTIVITA ============ */
 function opSuggest(sett){var seen={},out=[];(PRESET[sett]||[]).forEach(function(o){seen[o.toLowerCase()]=1;out.push(o)});
@@ -294,7 +338,8 @@ function monthChart(rows,anno){
 function matrix(rows){var ops=group(rows,function(a){return a.operatore||'—'}).map(function(x){return x.k}),sets=SETTORI.filter(function(s){return rows.some(function(a){return settoreDi(a)===s})});
  var v={},mx=1;rows.forEach(function(a){var k=(a.operatore||'—')+'|'+settoreDi(a);v[k]=(v[k]||0)+Number(a.ore);mx=Math.max(mx,v[k])});
  return'<div class="scroll"><table class="heat"><tr><th>Dipendente</th>'+sets.map(function(s){return'<th class="n">'+esc(s)+'</th>'}).join('')+'<th class="n">Totale</th></tr>'+ops.map(function(o){var t=0;var tds=sets.map(function(s){var x=v[o+'|'+s]||0;t+=x;return'<td class="n" style="background:color-mix(in srgb,var(--acc) '+Math.round(x/mx*45)+'%,transparent)">'+(x?fore(x):'–')+'</td>'}).join('');return'<tr><td>'+esc(o)+'</td>'+tds+'<td class="n"><b>'+fore(t)+'</b></td></tr>'}).join('')+'</table></div>'}
-function vStat(){var f=S.f;var yrs={};S.att.forEach(function(a){yrs[a.data.slice(0,4)]=1});yrs[new Date().getFullYear()]=1;var ylist=Object.keys(yrs).sort().reverse();
+function vStat(){return scaBanner()+vStat0()}
+function vStat0(){var f=S.f;var yrs={};S.att.forEach(function(a){yrs[a.data.slice(0,4)]=1});yrs[new Date().getFullYear()]=1;var ylist=Object.keys(yrs).sort().reverse();
  var opers=Object.keys(S.att.reduce(function(m,a){m[a.operatore]=1;return m},{})).sort();
  var rows=fRows(),tot=rows.reduce(function(s,a){return s+Number(a.ore)},0),days={};rows.forEach(function(a){days[a.data]=1});
  var mc=monthChart(f.mese==='0'?rows:rows,f.anno),bs=group(rows,settoreDi),bo=group(rows,function(a){return a.operatore||'—'}),bz=spreadZ(rows),bop=group(rows,function(a){return a.operazione.trim().toLowerCase().replace(/^./,function(c){return c.toUpperCase()})});
@@ -519,7 +564,7 @@ function fMag(){var rows=F.prod.map(function(p){return{p:p,g:giac(p.id)}}).filte
  var bs=F.bolle.slice().sort(function(a,b){return a.data<b.data?1:-1});
  return'<div class="row" style="margin:6px 0"><button class="btn" data-act="fbolla">+ Nuova bolla di carico</button><button class="btn g" data-act="finv">Inventario / rettifica</button><span class="sp"></span><button class="btn g sm" data-fexp="mag-x">Excel</button></div><div class="card"><h3>Giacenze</h3><div class="scroll"><table><tr><th>Prodotto</th><th class="n">Giacenza</th><th>Ultimo inventario</th></tr>'+(rows.length?rows.map(function(x){return'<tr><td>'+esc(x.p.nome)+'</td><td class="n"'+(x.g.q<0?' style="color:var(--bad);font-weight:700"':'')+'>'+nrm(Math.round(x.g.q*100)/100)+' '+x.p.unita+(x.g.q<0?' ⚠':'')+'</td><td class="mut">'+(x.g.iv?fdmy(x.g.iv.data)+' ('+nrm(x.g.iv.quantita)+')':'nessuno')+'</td></tr>'}).join(''):'<tr><td colspan="3" class="mut">Nessun prodotto a magazzino: registra una bolla o un inventario.</td></tr>')+'</table></div><p class="mut">Giacenza = ultimo inventario + carichi da bolla − prodotto usato nei trattamenti dopo la data dell’inventario. Un valore negativo (⚠) significa che manca una bolla o un inventario.</p></div>'+
  '<div class="card"><h3>Bolle di carico</h3>'+(bs.length?bs.map(function(b){var rs=F.brighe.filter(function(r){return r.bolla_id===b.id});return'<div class="it"><div class="sp"><div class="t">'+fdmy(b.data)+' · bolla '+esc(b.numero||'—')+' · '+esc(b.fornitore||'')+'</div><div class="mut">'+rs.map(function(r){var p=prodById(r.prodotto_id);return esc(p?p.nome:'?')+' '+nrm(r.quantita)+' '+(p?p.unita:'')+(r.lotto?' (lotto '+esc(r.lotto)+')':'')}).join(' · ')+'</div></div><button class="btn d sm" data-fbdel="'+b.id+'">×</button></div>'}).join(''):'<p class="mut">Nessuna bolla registrata.</p>')+'</div>'}
-function fProd(){return'<div class="row" style="margin:6px 0"><button class="btn" data-act="fnewp">+ Nuovo prodotto</button></div>'+prodTable(true)}
+function fProd(){return'<div class="row" style="margin:6px 0"><button class="btn" data-act="fnewp">+ Nuovo prodotto</button> <button class="btn g" data-act="fbulk">Carica PDF in blocco</button></div>'+prodTable(true)}
 function prodTable(master){var mm=master&&isM()?sdsMiss():[];return(mm.length?'<div class="al al-warn">⚠ Scheda di sicurezza mancante per: '+mm.map(function(p){return esc(p.nome)}).join(', ')+'. Caricala da “Modifica” (visibile solo a te).</div>':'')+'<div class="card scroll"><table><tr><th>Prodotto</th><th>Tipo</th><th>Sostanza attiva</th><th class="n">Carenza</th><th class="n">Dose max/ha</th><th class="n">Max/anno</th><th>Schede</th><th></th></tr>'+F.prod.filter(function(p){return p.attivo}).map(function(p){return'<tr><td><b>'+esc(p.nome)+'</b>'+(p.verificato?'':' <span class="tag w" data-tip="Dati non ancora verificati sull’etichetta">da verificare</span>')+'</td><td>'+esc(p.tipo)+'</td><td>'+esc(p.sostanza_attiva||'')+'</td><td class="n">'+(p.carenza_gg!=null?p.carenza_gg+' gg':'—')+'</td><td class="n">'+(p.dose_max_ha!=null?nrm(p.dose_max_ha)+' '+p.unita:'—')+'</td><td class="n">'+(p.n_max_anno!=null?p.n_max_anno:'—')+'</td><td style="white-space:nowrap">'+schedaLink(p,'scheda')+' '+schedaLink(p,'sds')+'</td><td>'+(master?'<button class="btn g sm" data-fpedit="'+p.id+'">Modifica</button>':'')+'</td></tr>'+(p.note_limiti?'<tr><td colspan="8" class="mut" style="padding-top:0">'+esc(p.note_limiti)+'</td></tr>':'')}).join('')+'</table></div>'}
 function vProdEmp(){return'<h2>Schede prodotti</h2><p class="mut">Per ogni prodotto trovi la scheda del prodotto (etichetta) e la scheda di sicurezza. Leggile prima di preparare la miscela.</p>'+(F.err?'<div class="card">Elenco non disponibile.</div>':prodTable(false))}
 /* ---- dialoghi ---- */
@@ -535,7 +580,7 @@ function openInt(o){o=o||{};var e=o.edit,tipo=e?e.tipo:(o.tipo||'trattamento'),a
  var vz=vigZone(),sel0=e&&e.area_ids&&e.area_ids.length?e.area_ids:(act&&!act.tutta_campagna&&vz.some(function(x){return x.id===act.area_id})?[act.area_id]:vz.map(function(x){return x.id}));
  var haOf=function(ids){return Math.round(vz.filter(function(x){return ids.indexOf(x.id)>=0}).reduce(function(t,x){return t+Number(x.ettari)},0)*100)/100};
  F.curHa=e&&rs[0]&&rs[0].superficie_ha!=null?null:haOf(sel0);
- var pats=(S.profili||[]).filter(function(p){return p.patentino&&p.attivo}).map(function(p){return p.nome}),opv=e?(e.operatore||''):(F.imp.operatore||'');
+ var pats=(S.profili||[]).filter(function(p){return p.patentino&&p.attivo&&!patScad(p.id)}).map(function(p){return p.nome}),opv=e?(e.operatore||''):(F.imp.operatore||'');
  if(opv&&pats.map(function(n){return n.toLowerCase()}).indexOf(opv.toLowerCase())<0&&e)pats.push(opv);
  var opSel=pats.length?'<select id="fi-o"><option value="">— scegli —</option>'+pats.map(function(n){return'<option'+(n.toLowerCase()===opv.toLowerCase()?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select>':'<select id="fi-o"><option value="">Nessun utente con patentino</option></select><div class="mut">In “Squadra” spunta “Patentino” per chi può trattare.</div>';
  var bq=num(F.imp.botte_q)||15;
@@ -602,7 +647,7 @@ async function fExport(k){var doc=getDoc(k),name=({quad:'Quaderno_di_campagna_',
  try{await loadXlsx();var ws=XLSX.utils.aoa_to_sheet(doc.aoa),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Foglio1');XLSX.writeFile(wb,name+'.xlsx')}catch(e){dlCsv(name,doc.aoa);toast('Excel non disponibile: scaricato in formato CSV (si apre con Excel).')}}
 async function fOpenFile(path){var r=await sb.storage.from('schede').createSignedUrl(path,3600);if(r.error)return fail(r.error);window.open(r.data.signedUrl,'_blank')}
 
-var FIT_ACT={fnew:function(){openInt()},fnewc:function(){openInt({tipo:'concimazione'})},fimp:openImp,fnewp:function(){openProd()},fbolla:openBolla,finv:openInv};
+var FIT_ACT={fnew:function(){openInt()},fnewc:function(){openInt({tipo:'concimazione'})},fimp:openImp,fnewp:function(){openProd()},fbulk:openBulk,fbolla:openBolla,finv:openInv};
 document.addEventListener('click',function(ev){var t=ev.target,b;
  if(b=t.closest('[data-ftab]')){F.tab=b.dataset.ftab;view();return}
  if(b=t.closest('[data-fcomp]')){var a=S.att.find(function(x){return x.id===+b.dataset.fcomp});if(a)openInt({act:a,tipo:/^concimazione/i.test(a.operazione.trim())?'concimazione':/^diserbo/i.test(a.operazione.trim())?'diserbo':'trattamento'});return}
@@ -622,7 +667,7 @@ document.addEventListener('click',async function(ev){var t=ev.target,b;
  if(b=t.closest('[data-sdel]')){if(!confirm('Eliminare questa voce?'))return;var r2=await sb.from('az_sostituzioni').delete().eq('id',+b.dataset.sdel);if(r2.error)return fail(r2.error);await loadVig();view();return}
  if(b=t.closest('[data-go]')){S.view=b.dataset.go;view();window.scrollTo(0,0);return}
  if(b=t.closest('[data-act]')){var a=b.dataset.act;ev.preventDefault();
-  if(a==='logout')logout();else if(FIT_ACT[a])FIT_ACT[a]();else if(a==='newsost')openSost();else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
+  if(a==='logout')logout();else if(FIT_ACT[a])FIT_ACT[a]();else if(a==='newsost')openSost();else if(a==='newsca')openSca();else if(a==='editsca')openSca(+b.dataset.id);else if(a==='close')$('#dlg').close();else if(a==='newatt')openAtt();else if(a==='newpian')openPian();else if(a==='csv')csv();
   else if(a==='laall'){S.la.mese='';view()}else if(a==='tgl')b.closest('.cc').classList.toggle('t');return}
  if(b=t.closest('[data-edit]')){var e=S.att.find(function(x){return x.id===+b.dataset.edit});if(e)openAtt({edit:e});return}
  if(b=t.closest('[data-fatto]')){var p=b.dataset.fatto.split('|'),pp=S.pian.find(function(x){return x.id===+p[0]});openAtt({pian:pp.id,occ:p[1],op:pp.titolo,area_id:pp.area_id,settore:pp.area_id&&area(pp.area_id)?area(pp.area_id).settore:null});return}
