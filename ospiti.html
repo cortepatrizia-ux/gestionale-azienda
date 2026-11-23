@@ -119,7 +119,7 @@ function render(){var a=document.getElementById('app'),h='';
   document.getElementById('o-d').onchange=function(){keep();sel.data=this.value;sel.slot='';S.taken=[];render();if(s.slots)loadTaken()};
   [].forEach.call(a.querySelectorAll('[data-sl]'),function(b){b.onclick=function(){keep();sel.slot=b.dataset.sl;render()}});
   [].forEach.call(a.querySelectorAll('[data-w]'),function(b){b.onclick=function(){keep();sel.vino=b.dataset.w;render()}});
-  var qm=document.getElementById('q-'),qp=document.getElementById('q+');if(qm){qm.onclick=function(){keep();sel.qty=Math.max(1,sel.qty-1);render()};qp.onclick=function(){keep();sel.qty=Math.min(20,sel.qty+1);render()}}
+  var qm=document.getElementById('q-'),qp=document.getElementById('q+');if(qm){qm.onclick=function(){keep();sel.qty=Math.max(1,sel.qty-1);render()};qp.onclick=function(){keep();sel.qty=Math.min(s.max_qty||20,sel.qty+1);render()}}
   document.getElementById('ok').onclick=function(){keep();
    if(s.slots&&!sel.slot){S.err=t('slot')+'?';return render()}
    if(s.scelta_vino&&!sel.vino){S.err=t('e').vino_mancante||'';S.err=T[L].e.vino_mancante;return render()}
