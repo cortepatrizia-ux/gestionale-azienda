@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Corte Patrizia · Servizi extra</title>
+<style>
+:root{--acc:#2f6b3a;--acc2:#e6efe7;--ink:#1f2a22;--mut:#6a766d;--line:#dfe6e0;--bg:#f6f4ee;--card:#fff;--bad:#a8372c}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+.w{max-width:560px;margin:0 auto;padding:18px 16px 60px}
+header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+header h1{font-size:20px;margin:0;flex:1;color:var(--acc)}
+.lang button{border:1px solid var(--line);background:var(--card);padding:5px 10px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--ink)}
+.lang button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+h2{font-size:18px;margin:0 0 8px}
+label{display:block;font-size:14px;color:var(--mut);margin:12px 0 4px}
+input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+button.pri{width:100%;margin-top:16px;padding:13px;border:0;border-radius:12px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.pri:disabled{opacity:.5}
+button.lnk{background:none;border:0;color:var(--acc);font:inherit;cursor:pointer;padding:6px 0;text-decoration:underline}
+.mut{color:var(--mut);font-size:14px}.err{color:var(--bad);font-size:14px;margin-top:10px}
+.svc{display:flex;gap:12px;align-items:flex-start}.svc .t{flex:1}.svc b{font-size:16px}
+.price{white-space:nowrap;font-weight:700;color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{border:1.5px solid var(--line);background:#fff;padding:10px 14px;border-radius:10px;cursor:pointer;font:inherit}
+.chip.on{border-color:var(--acc);background:var(--acc2);font-weight:600}
+.chip:disabled{opacity:.4;text-decoration:line-through;cursor:not-allowed}
+.qty{display:flex;align-items:center;gap:14px;margin-top:6px}
+.qty button{width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);background:#fff;font-size:22px;cursor:pointer}
+.qty b{font-size:20px;min-width:24px;text-align:center}
+.tot{display:flex;justify-content:space-between;font-size:18px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.ok{text-align:center}.ok .big{font-size:42px}
+.ord{padding:8px 0;border-top:1px solid var(--line);font-size:14px}.ord:first-of-type{border-top:0}
+</style>
+</head>
+<body>
+<div class="w">
+  <header><h1>Corte Patrizia</h1><div class="lang"><button id="l-it" class="on">IT</button> <button id="l-en">EN</button></div></header>
+  <div id="app"></div>
+</div>
+<script>
+var FN='https://sjtwtodkdmhzmueywqxv.supabase.co/functions/v1/agr-guest';
+var KEY='sb_publishable_WO1CQXZT685l2iLM2CYzMw_f6Dr_62z';
+var L=(navigator.language||'it').toLowerCase().indexOf('en')===0?'en':'it';
+var S={step:'find',data:null,svc:null,sel:{},busy:false,err:'',taken:[]};
+var T={
+ it:{title:'Servizi extra',intro:'Prenota aperitivi, yoga e area wellness per il tuo soggiorno.',find:'Trova la tua prenotazione',surname:'Cognome sulla prenotazione',arrival:'Data di arrivo',code:'Numero di prenotazione (facoltativo)',cont:'Continua',hello:'Ciao',apt:'Appartamento',stay:'Soggiorno',mine:'I tuoi servizi già prenotati',book:'Prenota',back:'← Indietro',date:'Data',choose:'Scegli',slot:'Fascia oraria',qty:'Quantità',wine:'Vino',email:'La tua email (riceverai la conferma)',emailOpt:'Email per la conferma (facoltativa)',note:'Note (facoltative)',total:'Totale',confirm:'Conferma prenotazione',done:'Prenotazione registrata',mailSent:'Ti abbiamo inviato una email di conferma con le istruzioni.',mailNo:'La conferma è registrata. Non siamo riusciti a inviarti l\'email: mostra questa schermata in reception se hai dubbi.',other:'Prenota un altro servizio',pay:'L\'importo verrà aggiunto al tuo conto e saldato alla partenza.',noDates:'Nessuna data disponibile durante il tuo soggiorno.',noSvc:'Al momento non ci sono servizi prenotabili.',load:'Un attimo…',bianco:'Bianco',rosso:'Rosso',rosato:'Rosato',
+  e:{not_found:'Non troviamo la prenotazione. Controlla cognome e data di arrivo, oppure scrivici o chiedi in reception.',troppi_tentativi:'Troppi tentativi. Riprova tra qualche minuto o chiedi in reception.',sessione_scaduta:'La sessione è scaduta: ripeti la ricerca.',giorno_non_disponibile:'Il servizio non è disponibile in quel giorno.',data_fuori_soggiorno:'La data deve essere durante il tuo soggiorno.',slot_occupato:'Quella fascia è appena stata prenotata: scegline un\'altra.',email_non_valida:'Inserisci un indirizzo email valido.',vino_mancante:'Scegli il vino.',nessuna_lezione:'Quel giorno non c\'è lezione.',dati_mancanti:'Compila cognome e data di arrivo.',errore:'Qualcosa non ha funzionato. Riprova o chiedi in reception.'}},
+ en:{title:'Extra services',intro:'Book aperitifs, yoga and the wellness area for your stay.',find:'Find your booking',surname:'Surname on the booking',arrival:'Arrival date',code:'Booking number (optional)',cont:'Continue',hello:'Hello',apt:'Apartment',stay:'Stay',mine:'Your booked services',book:'Book',back:'← Back',date:'Date',choose:'Choose',slot:'Time slot',qty:'Quantity',wine:'Wine',email:'Your email (you will receive the confirmation)',emailOpt:'Email for the confirmation (optional)',note:'Notes (optional)',total:'Total',confirm:'Confirm booking',done:'Booking registered',mailSent:'We have sent you a confirmation email with the instructions.',mailNo:'Your booking is registered. We could not send the email: show this screen at the reception if in doubt.',other:'Book another service',pay:'The amount will be added to your bill and settled at departure.',noDates:'No dates available during your stay.',noSvc:'There are no bookable services at the moment.',load:'One moment…',bianco:'White',rosso:'Red',rosato:'Rosé',
+  e:{not_found:'We cannot find your booking. Please check surname and arrival date, or contact us / ask at the reception.',troppi_tentativi:'Too many attempts. Please try again in a few minutes or ask at the reception.',sessione_scaduta:'Session expired: please search again.',giorno_non_disponibile:'This service is not available on that day.',data_fuori_soggiorno:'The date must be during your stay.',slot_occupato:'That slot has just been booked: please choose another.',email_non_valida:'Please enter a valid email address.',vino_mancante:'Please choose the wine.',nessuna_lezione:'There is no class on that day.',dati_mancanti:'Please fill in surname and arrival date.',errore:'Something went wrong. Please try again or ask at the reception.'}}
+};
+var UN={'tagliere (2 persone)':'platter (2 people)','persona':'person','lezione':'class','3 ore (uso esclusivo)':'3 hours (exclusive use)'};
+var WINE={Bianco:'bianco',Rosso:'rosso',Rosato:'rosato'};
+function t(k){return T[L][k]}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function eur(n){return Number(n||0).toLocaleString(L==='en'?'en-GB':'it-IT',{style:'currency',currency:'EUR'})}
+function fd(s,long){return new Date(s+'T12:00:00Z').toLocaleDateString(L==='en'?'en-GB':'it-IT',long?{weekday:'long',day:'numeric',month:'long'}:{weekday:'short',day:'numeric',month:'short'})}
+function addDays(s,n){var d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+function dow(s){return new Date(s+'T12:00:00Z').getUTCDay()}
+function sName(s){return L==='en'&&s.nome_en?s.nome_en:s.nome}
+function sDescr(s){return (L==='en'?s.descr_en:s.descr_it)||s.descr_it||''}
+function sUnit(s){return L==='en'?(UN[s.unita]||s.unita):s.unita}
+function api(body){body.lingua=L;return fetch(FN,{method:'POST',headers:{'Content-Type':'application/json',apikey:KEY},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){if(!r.ok)throw {code:j.error||'errore'};return j})},function(){throw {code:'errore'}})}
+function errTxt(e){return T[L].e[e.code]||T[L].e.errore}
+function setLang(l){L=l;document.documentElement.lang=l;document.getElementById('l-it').className=l==='it'?'on':'';document.getElementById('l-en').className=l==='en'?'on':'';render()}
+document.getElementById('l-it').onclick=function(){setLang('it')};document.getElementById('l-en').onclick=function(){setLang('en')};
+
+function dates(s){var D=S.data,out=[],from=D.oggi>D.arrivo?D.oggi:D.arrivo;
+ for(var d=from;d<D.partenza;d=addDays(d,1)){
+  if(s.giorni&&s.giorni.indexOf(dow(d))<0)continue;
+  if(s.usa_lezioni&&!D.lezioni.some(function(l){return l.data===d}))continue;
+  out.push(d)}return out}
+
+function render(){var a=document.getElementById('app'),h='';
+ if(S.step==='find'){
+  h='<div class="card"><h2>'+t('find')+'</h2><p class="mut">'+t('intro')+'</p>'+
+   '<label>'+t('surname')+'</label><input id="f-s" autocomplete="family-name" value="'+esc(S.f&&S.f.s||'')+'">'+
+   '<label>'+t('arrival')+'</label><input id="f-a" type="date" value="'+esc(S.f&&S.f.a||'')+'">'+
+   '<label>'+t('code')+'</label><input id="f-c" value="'+esc(S.f&&S.f.c||'')+'">'+
+   '<button class="pri" id="go"'+(S.busy?' disabled':'')+'>'+(S.busy?t('load'):t('cont'))+'</button>'+(S.err?'<div class="err">'+esc(S.err)+'</div>':'')+'</div>';
+  a.innerHTML=h;
+  document.getElementById('go').onclick=function(){var f={s:val('f-s'),a:val('f-a'),c:val('f-c')};S.f=f;S.busy=true;S.err='';render();
+   api({action:'lookup',cognome:f.s,arrivo:f.a,codice:f.c}).then(function(d){S.data=d;S.step='list';S.busy=false;render()},function(e){S.busy=false;S.err=errTxt(e);render()})};
+  return}
+ var D=S.data;
+ if(S.step==='list'){
+  h='<div class="card"><h2>'+t('hello')+(D.ospite?' '+esc(D.ospite):'')+'</h2><div class="mut">'+t('apt')+': <b>'+esc(D.apt)+'</b><br>'+t('stay')+': '+fd(D.arrivo)+' → '+fd(D.partenza)+'</div></div>';
+  if(D.ordini&&D.ordini.length){h+='<div class="card"><b>'+t('mine')+'</b>'+D.ordini.map(function(o){var s=D.servizi.filter(function(x){return x.id===o.servizio_id})[0];return'<div class="ord">'+esc(s?sName(s):'')+' · '+fd(o.data)+(o.slot?' · '+esc(o.slot):'')+' · ×'+o.quantita+'</div>'}).join('')+'</div>'}
+  h+=D.servizi.length?D.servizi.map(function(s){return'<div class="card svc"><div class="t"><b>'+esc(sName(s))+'</b><div class="mut">'+esc(sDescr(s))+'</div></div><div><div class="price">'+eur(s.prezzo)+'</div><div class="mut" style="text-align:right">'+esc(sUnit(s)||'')+'</div><button class="pri" style="margin-top:8px;padding:9px 14px" data-s="'+s.id+'">'+t('book')+'</button></div></div>'}).join(''):'<p class="mut">'+t('noSvc')+'</p>';
+  a.innerHTML=h;
+  [].forEach.call(a.querySelectorAll('[data-s]'),function(b){b.onclick=function(){S.svc=D.servizi.filter(function(x){return x.id===+b.dataset.s})[0];var ds=dates(S.svc);S.sel={data:ds[0]||'',slot:'',qty:1,vino:'',email:'',note:''};S.taken=[];S.err='';S.step='order';render();if(S.sel.data&&S.svc.slots)loadTaken()}});
+  return}
+ if(S.step==='order'){var s=S.svc,sel=S.sel,ds=dates(s);
+  h='<div class="card"><button class="lnk" id="bk">'+t('back')+'</button><h2>'+esc(sName(s))+'</h2><div class="mut">'+esc(sDescr(s))+'</div>';
+  if(!ds.length)h+='<p class="err">'+t('noDates')+'</p>';
+  else{
+   h+='<label>'+t('date')+'</label><select id="o-d">'+ds.map(function(d){return'<option value="'+d+'"'+(d===sel.data?' selected':'')+'>'+esc(fd(d,true))+'</option>'}).join('')+'</select>';
+   if(s.orario)h+='<div class="mut" style="margin-top:6px">'+(L==='en'?'Time':'Orario')+': <b>'+esc(s.orario)+'</b> · reception</div>';
+   if(s.slots&&s.slots.length)h+='<label>'+t('slot')+'</label><div class="chips">'+s.slots.map(function(x){var tk=S.taken.indexOf(x)>=0;return'<button class="chip'+(sel.slot===x?' on':'')+'" data-sl="'+x+'"'+(tk?' disabled':'')+'>'+x.replace('-',' – ')+'</button>'}).join('')+'</div>';
+   if(!s.esclusivo)h+='<label>'+t('qty')+(s.unita?' ('+esc(sUnit(s))+')':'')+'</label><div class="qty"><button id="q-" aria-label="-">−</button><b>'+sel.qty+'</b><button id="q+" aria-label="+">+</button></div>';
+   if(s.scelta_vino)h+='<label>'+t('wine')+'</label><div class="chips">'+['Bianco','Rosso','Rosato'].map(function(w){return'<button class="chip'+(sel.vino===w?' on':'')+'" data-w="'+w+'">'+t(WINE[w])+'</button>'}).join('')+'</div>';
+   h+='<label>'+(D.has_email?t('emailOpt'):t('email'))+'</label><input id="o-e" type="email" autocomplete="email" value="'+esc(sel.email)+'">'+
+    '<label>'+t('note')+'</label><textarea id="o-n" rows="2">'+esc(sel.note)+'</textarea>'+
+    '<div class="tot"><span>'+t('total')+'</span><b>'+eur(s.prezzo*(s.esclusivo?1:sel.qty))+'</b></div><div class="mut" style="margin-top:6px">'+t('pay')+'</div>'+
+    '<button class="pri" id="ok"'+(S.busy?' disabled':'')+'>'+(S.busy?t('load'):t('confirm'))+'</button>'}
+  h+=(S.err?'<div class="err">'+esc(S.err)+'</div>':'')+'</div>';
+  a.innerHTML=h;
+  document.getElementById('bk').onclick=function(){S.step='list';S.err='';render()};
+  if(!ds.length)return;
+  var keep=function(){sel.email=val('o-e');sel.note=val('o-n')};
+  document.getElementById('o-d').onchange=function(){keep();sel.data=this.value;sel.slot='';S.taken=[];render();if(s.slots)loadTaken()};
+  [].forEach.call(a.querySelectorAll('[data-sl]'),function(b){b.onclick=function(){keep();sel.slot=b.dataset.sl;render()}});
+  [].forEach.call(a.querySelectorAll('[data-w]'),function(b){b.onclick=function(){keep();sel.vino=b.dataset.w;render()}});
+  var qm=document.getElementById('q-'),qp=document.getElementById('q+');if(qm){qm.onclick=function(){keep();sel.qty=Math.max(1,sel.qty-1);render()};qp.onclick=function(){keep();sel.qty=Math.min(20,sel.qty+1);render()}}
+  document.getElementById('ok').onclick=function(){keep();
+   if(s.slots&&!sel.slot){S.err=t('slot')+'?';return render()}
+   if(s.scelta_vino&&!sel.vino){S.err=t('e').vino_mancante||'';S.err=T[L].e.vino_mancante;return render()}
+   S.busy=true;S.err='';render();
+   api({action:'order',token:D.token,servizio_id:s.id,data:sel.data,slot:sel.slot||null,quantita:sel.qty,vino:sel.vino||null,email:sel.email,note:sel.note}).then(function(r){S.busy=false;S.res=r;S.step='done';render()},function(e){S.busy=false;S.err=errTxt(e);if(e.code==='slot_occupato'){sel.slot='';loadTaken()}render()})};
+  return}
+ if(S.step==='done'){var s2=S.svc,r=S.res;
+  a.innerHTML='<div class="card ok"><div class="big">✓</div><h2>'+t('done')+'</h2><p><b>'+esc(sName(s2))+'</b><br>'+esc(fd(S.sel.data,true))+(S.sel.slot?'<br>'+esc(S.sel.slot.replace('-',' – ')):'')+(s2.orario?'<br>'+esc(s2.orario):'')+'</p><p class="mut">'+(r.mail_inviata?t('mailSent'):t('mailNo'))+'</p><button class="pri" id="again">'+t('other')+'</button></div>';
+  document.getElementById('again').onclick=function(){api({action:'lookup',cognome:S.f.s,arrivo:S.f.a,codice:S.f.c}).then(function(d){S.data=d;S.step='list';render()},function(){S.step='list';render()})}}}
+function val(id){var e=document.getElementById(id);return e?e.value.trim():''}
+function loadTaken(){var s=S.svc,sel=S.sel;api({action:'avail',token:S.data.token,servizio_id:s.id,data:sel.data}).then(function(r){S.taken=r.occupati||[];if(S.step==='order')render()},function(){})}
+setLang(L);
+</script>
+</body>
+</html>
