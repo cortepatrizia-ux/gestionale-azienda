@@ -55,7 +55,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:7px 8px;b
 .agit{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.agbadge{font-size:11px;background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap}
 .agcal{table-layout:fixed;border-collapse:separate;border-spacing:0}.agcal th,.agcal td{padding:0;border:0;border-bottom:1px solid var(--line);height:30px;font-size:11px;text-align:center}.agcal th.agd{width:32px;line-height:1.1;color:var(--mut);font-weight:600;padding:3px 0}.agcal th.we,.agcal td.we{background:var(--acc-soft)}.agcal th.td{color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc)}.agcal td.td{box-shadow:inset 1px 0 0 var(--acc),inset -1px 0 0 var(--acc)}
 .agcal th.aptn{width:130px;position:sticky;left:0;background:var(--card);text-align:left;padding:0 8px;font-size:12px;font-weight:600;color:var(--ink);z-index:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid var(--line)}
-.agb{padding:2px 1px!important}.agb .agl{margin:0 1px;height:24px;line-height:24px;color:#fff;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 5px;text-align:left;font-weight:600}.agb .agl small{font-weight:400;opacity:.9}
+.agb{padding:2px 1px!important;position:relative}.agcb{position:absolute;top:3px;height:24px;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:13px;background:#fbefd6;border-radius:4px;box-shadow:0 0 0 1px #e3b95a}.agb .agl{margin:0 1px;height:24px;line-height:24px;color:#fff;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 5px;text-align:left;font-weight:600}.agb .agl small{font-weight:400;opacity:.9}
 .gi{display:inline-block;min-width:15px;height:15px;line-height:15px;border-radius:50%;text-align:center;font-style:normal;font-size:11px;font-weight:700;margin-right:3px;vertical-align:1px}.gi.ok{background:#e4f3e6;color:#1f5a2c}.gi.no{background:#f5b301;color:#3a2a00}.ch-b{--c:#2b5f9e}.ch-a{--c:#b3423a}.ch-d{--c:#2f6b3a}.ch-o{--c:#5d6670}.agb .agl,.agdot.ch-b,.agdot.ch-a,.agdot.ch-d,.agdot.ch-o{background:var(--c)}.agb.agx .agl,.agdot.agx{background:repeating-linear-gradient(45deg,var(--line),var(--line) 4px,transparent 4px,transparent 8px);color:var(--mut)}
 .agtag{display:inline-block;font-size:12px;font-weight:600;border-radius:8px;padding:3px 8px;margin:4px 6px 0 0}.agtag.t-p{background:#f6e3e0;color:#9b3328}.agtag.t-a{background:#e1ecf8;color:#1f4f87}.agtag.t-c{background:#fbefd6;color:#8a5a0b}.agtags{margin-top:2px}.agwed{background:var(--acc-soft);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:14px}.agbadge.ok{background:var(--acc-soft);color:var(--acc)}
 .agdot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
@@ -818,20 +818,23 @@ function agDayInfo(d){var st=agStays().filter(function(p){return p.tipo==='preno
  casa=st.filter(function(p){return p.arrivo<d&&p.partenza>d}),
  occ={};st.forEach(function(p){if(p.arrivo<=d&&p.partenza>d)occ[p.apt_id]=1});
  var dep={};par.forEach(function(p){dep[p.apt_id]=1});
+ var cam=st.filter(function(p){return agCambio(p)===d});
  var act=S.agr.apt.filter(function(a){return a.attivo});
- return{arr:arr,par:par,casa:casa,liberi:act.filter(function(a){return!occ[a.id]}).length,dep:dep,tot:act.length}}
+ return{arr:arr,par:par,cam:cam,casa:casa,liberi:act.filter(function(a){return!occ[a.id]}).length,dep:dep,tot:act.length}}
 function agItem(p,dep){var n=agNights(p),ed=isM()?' data-agp="'+p.id+'" style="cursor:pointer"':'';
  return'<div class="agit"'+ed+'><div class="sp"><b>'+esc(aptName(p.apt_id))+'</b> · '+esc(p.ospite||'Ospite')+(dep&&dep[p.apt_id]?' <span class="agbadge">cambio in giornata</span>':'')+'<div class="mut">'+agPax(p)+(p.note?' · '+esc(p.note):'')+'</div></div><div class="mut" style="text-align:right;white-space:nowrap">'+agNtxt(n)+(p.canale?'<br>'+esc(p.canale):'')+'</div></div>'}
-function agDayBlock(d,big){var i=agDayInfo(d),h='<div class="card"><div class="row"><b class="sp" style="font-size:'+(big?'18':'16')+'px">'+(d===today()?'Oggi · ':'')+fdate(d)+'</b><span class="mut">'+i.arr.length+(i.arr.length===1?' arrivo':' arrivi')+' · '+i.par.length+(i.par.length===1?' partenza':' partenze')+'</span></div>';
+function agDayBlock(d,big){var i=agDayInfo(d),h='<div class="card"><div class="row"><b class="sp" style="font-size:'+(big?'18':'16')+'px">'+(d===today()?'Oggi · ':'')+fdate(d)+'</b><span class="mut">'+i.arr.length+(i.arr.length===1?' arrivo':' arrivi')+' · '+i.par.length+(i.par.length===1?' partenza':' partenze')+' · '+i.cam.length+(i.cam.length===1?' cambio':' cambi')+'</span></div>';
  var sec=function(t,l,dep){return'<div style="margin-top:10px"><div class="mut" style="font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em">'+t+' ('+l.length+')</div>'+(l.length?l.map(function(p){return agItem(p,dep)}).join(''):'<div class="mut" style="padding:6px 0">Nessuno</div>')+'</div>'};
- return h+sec('Arrivi',i.arr,i.dep)+sec('Partenze',i.par)+'</div>'}
+ var camSec=function(l){return'<div style="margin-top:10px"><div class="mut" style="font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em">Cambio lenzuola e asciugamani ('+l.length+')</div>'+(l.length?l.map(function(p){var gi=Math.round((pd(d)-pd(p.arrivo))/864e5),ed=isM()?' data-agp="'+p.id+'" style="cursor:pointer"':'';return'<div class="agit"'+ed+'><div class="sp"><b>'+esc(aptName(p.apt_id))+'</b> · '+esc(p.ospite||'Ospite')+'<div class="mut"><span class="agtag t-c" style="margin:2px 0 0">Cambio biancheria · dopo '+gi+' notti di '+agNights(p)+'</span></div></div></div>'}).join(''):'<div class="mut" style="padding:6px 0">Nessuno</div>')+'</div>'};
+ return h+sec('Arrivi',i.arr,i.dep)+sec('Partenze',i.par)+camSec(i.cam)+'</div>'}
 function vAgO(){var A=S.agr;if(A.err)return agSetup();agInit();var d=A.day,r=A.rng,h='<h2>Arrivi e partenze</h2>'+agReqAlert();
  h+='<div class="row" style="gap:6px;flex-wrap:wrap;margin:8px 0"><button class="btn g sm" data-ag="prev" aria-label="Giorno precedente">←</button><input type="date" id="ag-d" value="'+d+'" style="width:auto"><button class="btn g sm" data-ag="next" aria-label="Giorno successivo">→</button><button class="btn g sm" data-ag="oggi">Oggi</button><button class="btn g sm" data-ag="domani">Domani</button></div>';
  h+='<div class="chips">'+[[1,'Solo il giorno'],[7,'7 giorni'],[14,'14 giorni'],[30,'30 giorni']].map(function(x){return'<button class="chip'+(r===x[0]?' on':'')+'" data-agr="'+x[0]+'">'+x[1]+'</button>'}).join('')+'</div>';
  h+=agSyncBar();
  if(r===1){var i=agDayInfo(d);h+='<div class="grid4" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:8px 0">'+[['Arrivi',i.arr.length],['Partenze',i.par.length],['In casa stanotte',i.casa.length+i.arr.length],['Appartamenti liberi',i.liberi+' / '+i.tot]].map(function(k){return'<div class="kpi"><b>'+k[1]+'</b><span>'+k[0]+'</span></div>'}).join('')+'</div>'+agDayBlock(d,true)}
- else{var any=false;for(var k=0;k<r;k++){var dd=addDays(d,k),i2=agDayInfo(dd);if(i2.arr.length||i2.par.length){any=true;h+=agDayBlock(dd)}}if(!any)h+='<div class="card"><p class="mut">Nessun arrivo o partenza in questo periodo.</p></div>'}
+ else{var any=false;for(var k=0;k<r;k++){var dd=addDays(d,k),i2=agDayInfo(dd);if(i2.arr.length||i2.par.length||i2.cam.length){any=true;h+=agDayBlock(dd)}}if(!any)h+='<div class="card"><p class="mut">Nessun arrivo, partenza o cambio biancheria in questo periodo.</p></div>'}
  if(!agStays().length)h+='<div class="card"><p class="mut">Non ci sono ancora prenotazioni. '+(isM()?'Collega i calendari Octorate o importa il file in <b>Prenotazioni</b>.':'')+'</p></div>';
+ h+='<p class="mut" style="font-size:13px">Cambio biancheria: soggiorni di 7 notti o più, a metà soggiorno (7 notti → dopo 3, 8 → dopo 4, 14 → dopo 7).'+(agStr()==='brenzone'?' A Brenzone il cambio può cadere anche di mercoledì.':' Se cadesse di mercoledì viene anticipato al martedì.')+'</p>';
  return h}
 
 /* ---- Calendario ---- */
@@ -843,11 +846,12 @@ function vAgC(){var A=S.agr;if(A.err)return agSetup();agInit();var dt=pd(A.cm),y
   while(i<=dim){var ds=y+'-'+pad(m+1)+'-'+pad(i),wd=pd(ds).getDay(),p=list.find(function(x){return x.arrivo<=ds&&x.partenza>ds});
    if(!p){row+='<td class="age'+(wd===0||wd===6?' we':'')+(ds===td?' td':'')+'"'+(isM()?' data-agnew="'+a.id+'|'+ds+'"':'')+'></td>';i++;continue}
    var en=addDays(p.partenza,-1),e=en>last?dim:+en.slice(8),sp=e-i+1,cls=p.tipo==='blocco'?'agx':agCh(p.canale);chs[cls]=p.canale||'';
+   var cg=p.tipo==='blocco'?null:agCambio(p),cmk='';if(cg&&cg>=first&&cg<=last&&cg>=ds&&cg<=en){var ix=+cg.slice(8)-i;cmk='<span class="agcb" style="left:calc('+(ix*100/sp)+'% + 2px);width:calc('+(100/sp)+'% - 4px)">🧺</span>'}
    var lab=p.tipo==='blocco'?'Bloccato':esc(p.ospite||'Prenotazione')+' <small>'+agPaxS(p)+'</small>';
-   row+='<td colspan="'+sp+'" class="agb '+cls+(p.arrivo>=first?' st':'')+(p.partenza<=last?' en':'')+'"'+(isM()?' data-agp="'+p.id+'"':'')+' title="'+esc((p.ospite||'')+' · '+fdate(p.arrivo)+' → '+fdate(p.partenza)+' · '+(p.tipo==='blocco'?'bloccato':(p.adulti==null?'ospiti da indicare':p.adulti+' ad., '+(p.bambini||0)+' bamb., '+(p.cani||0)+' cani'))+(p.canale?' · '+p.canale:''))+'"><div class="agl">'+lab+'</div></td>';i+=sp}
+   row+='<td colspan="'+sp+'" class="agb '+cls+(p.arrivo>=first?' st':'')+(p.partenza<=last?' en':'')+'"'+(isM()?' data-agp="'+p.id+'"':'')+' title="'+esc((p.ospite||'')+' · '+fdate(p.arrivo)+' → '+fdate(p.partenza)+' · '+(p.tipo==='blocco'?'bloccato':(p.adulti==null?'ospiti da indicare':p.adulti+' ad., '+(p.bambini||0)+' bamb., '+(p.cani||0)+' cani'))+(p.canale?' · '+p.canale:'')+(cg?' · cambio biancheria '+fdate(cg):''))+'"><div class="agl">'+lab+'</div>'+cmk+'</td>';i+=sp}
   return row+'</tr>'}).join('');
  h+='<div class="card scroll" style="padding:6px"><table class="agcal" style="min-width:'+(130+dim*32)+'px">'+th+body+'</table></div>';
- h+='<p class="mut" style="font-size:13px">Nelle barre: adulti<b>+</b>bambini, 🐕 se ci sono cani. <i class="gi ok">✓</i> numero ospiti confermato · <i class="gi no">!</i> numero ospiti da confermare. '+(isM()?'Tocca una prenotazione per modificarla, una casella vuota per aggiungerne una.':'')+'</p>';
+ h+='<p class="mut" style="font-size:13px">Nelle barre: adulti<b>+</b>bambini, 🐕 se ci sono cani. <i class="gi ok">✓</i> numero ospiti confermato · <i class="gi no">!</i> numero ospiti da confermare. 🧺 cambio lenzuola e asciugamani (soggiorni da 7 notti, a metà soggiorno). '+(isM()?'Tocca una prenotazione per modificarla, una casella vuota per aggiungerne una.':'')+'</p>';
  h+='<div class="row" style="gap:10px;flex-wrap:wrap;font-size:13px"><span><i class="agdot ch-b"></i>Booking</span><span><i class="agdot ch-a"></i>Airbnb</span><span><i class="agdot ch-d"></i>Diretta</span><span><i class="agdot ch-o"></i>Altro / non indicato</span><span><i class="agdot agx"></i>Bloccato</span></div>';
  setTimeout(function(){var th=document.querySelector('.agcal th.td'),sc=th&&th.closest('.scroll');if(sc)sc.scrollLeft=Math.max(0,th.offsetLeft-170)},0);
  return h}
@@ -1026,7 +1030,7 @@ function agOrdAct(){return S.agr.ord.filter(function(o){return o.stato!=='annull
 function agPrenOf(id){return S.agr.pren.find(function(p){return p.id===id})}
 function agRound(x){return Math.round(x*100)/100}
 /* cambio biancheria: soggiorni da 7 notti in su, a metà soggiorno; mai di mercoledì (si anticipa a martedì) */
-function agCambio(p){var n=agNights(p);if(n<7)return null;var b=addDays(p.arrivo,Math.floor(n/2));if(agDow(b)===3)b=addDays(b,-1);return b}
+function agCambio(p){var n=agNights(p);if(n<7)return null;var b=addDays(p.arrivo,Math.floor(n/2));if(agDow(b)===3&&agStr()!=='brenzone')b=addDays(b,-1);return b}
 
 /* ---- Pulizie ---- */
 function agCleanBlock(d){var st=agStays().filter(function(p){return p.tipo==='prenotazione'}),wed=agDow(d)===3,
